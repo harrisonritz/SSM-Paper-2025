@@ -1,0 +1,11 @@
+function plt = plot_error(x, col,linespec)
+
+n = sum(isfinite(x));
+
+
+hold on;
+plt=plot(nanmean(x), linespec, 'LineWidth', 3, 'Color',col, 'MarkerFaceColor', col, 'MarkerSize',10);
+plot(nanmean(x) + nanstd(x)./sqrt(n), '-', 'LineWidth', .33, 'Color', col);
+plot(nanmean(x) - nanstd(x)./sqrt(n), '-', 'LineWidth', .33, 'Color',col);
+
+end

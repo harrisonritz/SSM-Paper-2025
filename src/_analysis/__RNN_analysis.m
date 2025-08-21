@@ -1,0 +1,3056 @@
+%% Fig 4
+
+
+
+% setup
+
+
+
+clear; clc;
+
+
+ROOT = '/Users/hr0283/Brown Dropbox/Harrison Ritz/HallM_NeSS'
+fld = sprintf('%s/della-outputs/_RNN', ROOT);
+
+
+
+sem = @(x) nanstd(x,[],1)./sqrt(sum(isfinite(x)));
+sem_wn = @(x) ((size(x,2)-1)/size(x,2))*nanstd(x-nanmean(x,2),[],1)./sqrt(sum(isfinite(x)));
+mxnorm = @(x) x./norm(x,'fro');
+
+
+
+addpath(genpath("utils"))
+vik = load('vik.mat'); vik = vik.vik;
+davos = load('davos.mat'); davos = davos.davos;
+batlow = load('batlow.mat'); batlow = batlow.batlow;
+
+
+
+
+%% % example
+
+sig = @(x) 1./(1+exp(-x));
+
+short_ITI = 1;
+
+d = load(sprintf('%s/della-outputs/_RNN/example/NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100_savewt-1__TASK-iti-60_cuegain-100__14.mat', ROOT));
+
+figure; hold on;
+
+trial_num1 = 46;
+trial_num2 = 45;
+d.sim_conditions.switch1(trial_num1)
+
+
+% inputs
+nexttile; hold on;
+ins = squeeze(d.sim_inputs(trial_num1, :,:));
+ins = max(ins+randn(size(ins))*.05,0);
+plot(ins(1:70,1), '-r', 'LineWidth', 2)
+plot(ins(1:70,2), '-b', 'LineWidth', 2)
+plot(ins(1:70,3), '-y', 'LineWidth', 2)
+plot(ins(1:70,4), '-g', 'LineWidth', 2)
+plot(ins(1:70,5), '-m', 'LineWidth', 2)
+plot(ins(1:70,6), '-c', 'LineWidth', 2)
+set(gca, "tickDir", 'out', 'LineWidth', 1.5)
+
+
+% outputs
+nexttile; hold on;
+outs = squeeze(d.sim_latents(trial_num1,:,:))*d.readout_weight';
+% mean_left1 = squeeze(mean(d.sim_outputs(d.sim_conditions.correct_choice0==1 & d.sim_conditions.correct_choice1==-1,:,:),1));
+% mean_right1 = squeeze(mean(d.sim_outputs(d.sim_conditions.correct_choice0==-1 & d.sim_conditions.correct_choice1==1,:,:),1));
+
+plot(.5*squeeze(sign(d.sim_inputs(trial_num1,1:70,4))) + .5, '-k')
+plot(-.5*squeeze(sign(d.sim_inputs(trial_num1,1:70,4)))+.5, '-k')
+plot(sig(outs(1:70,:)), 'LineWidth', 2)
+% plot(sig(mean_left1(1:70,:)-mean_right1(1:70,:)), '--k', 'LineWidth', 2)
+set(gca, "tickDir", 'out', 'LineWidth', 1.5)
+
+
+
+
+
+
+% inputs
+nexttile; hold on;
+ins = squeeze(d.sim_inputs(trial_num2, :,:));
+if short_ITI
+    ins = ins([1:90, 130:200],:);
+end
+
+ins = max(ins+randn(size(ins))*.05,0);
+plot(ins(:,1), '-r', 'LineWidth', 2)
+plot(ins(:,2), '-b', 'LineWidth', 2)
+plot(ins(:,3), '-y', 'LineWidth', 2)
+plot(ins(:,4), '-g', 'LineWidth', 2)
+plot(ins(:,5), '-m', 'LineWidth', 2)
+plot(ins(:,6), '-c', 'LineWidth', 2)
+set(gca, "tickDir", 'out', 'LineWidth', 1.5)
+
+% outputs
+nexttile; hold on;
+outs = squeeze(d.sim_latents(trial_num1,:,:))*d.readout_weight';
+
+
+plot(.5*squeeze(sign(d.sim_inputs(trial_num2,:,4))) + .5, '-k')
+plot(-.5*squeeze(sign(d.sim_inputs(trial_num2,:,4)))+.5, '-k')
+plot(sig(outs), 'LineWidth', 2)
+% plot(sig(mean_left1-mean_right1), '--k', 'LineWidth', 2)
+set(gca, "tickDir", 'out', 'LineWidth', 1.5)
+
+
+set(gcf, 'Renderer', 'painters')
+
+
+
+
+
+
+%% plot loglik
+close all;
+
+vec = @(x) x(:)
+
+
+iti_list = [20,60]
+model_type = 'trial3' %task2 trial3
+n_trials = 3;
+vers4 = '900-100'
+
+figure; hold on;
+
+clear agg_loglik agg_loglik_switch1 agg_loglik_switch2 agg_loglik_repeat1 agg_loglik_repeat2
+
+
+for mm = 1:length(iti_list)
+
+    iti = iti_list(mm)
+    plot_sw_diff = 0
+
+    if iti == 20
+        cols = {[0,0,0], [0,1,0], [0,0,1], [1,0,0], [1,1,0], [1,0,1], [0,1,1]};
+    else
+        cols = {[0,0,0]*.50, [0,1,0]*.50, [0,0,1]*.50, [1,0,0]*.50, [1,1,0]*.50, [1,0,1]*.50, [0,1,1]*.50};
+    end
+
+
+
+
+    % plot_model = sprintf('task2_iti%d', iti)
+    plot_model = sprintf('%s_iti%d', model_type, iti)
+
+    % plot_model = 'trial3_iti60'
+
+
+    % get models ============================
+
+
+    switch plot_model
+
+        case 'task2_iti20'
+            % STANDARD 2-task
+
+            mdls = { 'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100__TASK-iti-20_cuegain-100',...
+                'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100__TASK-iti-20_cuegain-100',...
+                }
+
+
+
+        case 'task2_iti60'
+            % STANDARD 2-task
+
+            mdls = {'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100__TASK-iti-60_cuegain-100_loss',...
+                'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100__TASK-iti-60_cuegain-100_loss',...
+                }
+
+
+
+        case 'trial3_iti20'
+
+            mdls = {...
+                'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-3_noise-100_savewt-0__TASK-iti-20_cuegain-100_loss',...
+                'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-3_noise-100_savewt-0__TASK-iti-20_cuegain-100_loss',...
+                }
+
+        case 'trial3_iti60'
+
+            mdls = {...
+                'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-3_noise-100_savewt-0__TASK-iti-60_cuegain-100_loss',...
+                'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-3_noise-100_savewt-0__TASK-iti-60_cuegain-100_loss',...
+                }
+
+
+    end
+
+
+
+
+
+    % tsel = (50:140) + iti;
+    tsel = 0:(140 + iti);
+
+
+
+
+    nmdl = length(mdls)
+
+
+    % get files
+    files = cell(0);
+    for ii = 1:nmdl
+        files{ii} = dir(fullfile(fld, mdls{ii}, '*.mat'));
+    end
+
+    disp(files)
+
+
+
+
+    % plot ===================================
+
+
+    yl = [inf,-inf];
+    clear plt all_clean_step_size_switch1 all_clean_step_size_repeat1
+    clear all_clean_step_notsize_switch1 all_clean_step_notsize_repeat1
+    clear all_noisy_step_notsize_switch1 all_noisy_step_notsize_repeat1
+    clear all_noisy_step_size_switch1 all_noisy_step_size_repeat1
+
+    for ii = 1:nmdl
+
+        % load
+        dii = load(fullfile(files{ii}(1).folder, files{ii}(1).name));
+
+
+        %preallocate
+
+        [clean_loss, noisy_loss] = deal(nan(length(files{ii}), length(dii.noisy_loss)));
+        [clean_step, noisy_step, ...
+            clean_step_switch1, clean_step_repeat1, ...
+            noisy_step_switch1, noisy_step_repeat1,...
+            clean_step_switch2, clean_step_repeat2, ...
+            noisy_step_switch2, noisy_step_repeat2,...
+            clean_size_step, noisy_size_step,...
+            clean_step_size_switch1, clean_step_size_repeat1,...
+            noisy_step_size_switch1, noisy_step_size_repeat1,...
+            clean_step_wassize_switch1,clean_step_wassize_repeat1,...
+            noisy_step_wassize_switch1,noisy_step_wassize_repeat1,...
+            clean_step_notsize_switch1,clean_step_notsize_repeat1,...
+            noisy_step_notsize_switch1,noisy_step_notsize_repeat1,...
+            ] = deal(nan(length(files{ii}), size(dii.noisy_loss_step,2)));
+
+        parfor ff = 1:length(files{ii})
+
+
+            try
+
+                d=load(fullfile(files{ii}(ff).folder, files{ii}(ff).name),...
+                    'clean_loss', 'noisy_loss',...
+                    'clean_loss_step', 'noisy_loss_step',...
+                    'condition_set');
+
+
+                d.clean_loss;
+            catch
+                continue;
+            end
+
+            clean_loss(ff, :) = d.clean_loss;
+            noisy_loss(ff, :) = d.noisy_loss;
+
+            clean_step(ff,:) = mean(d.clean_loss_step,[1,3]);
+            noisy_step(ff,:) = mean(d.noisy_loss_step,[1,3]);
+
+            is_switch = d.condition_set.switch1==1;
+            clean_step_switch1(ff,:) = mean(d.clean_loss_step(is_switch,:,:),[1,3]);
+            clean_step_repeat1(ff,:) = mean(d.clean_loss_step(~is_switch,:,:),[1,3]);
+            noisy_step_switch1(ff,:) = mean(d.noisy_loss_step(is_switch,:,:),[1,3]);
+            noisy_step_repeat1(ff,:) = mean(d.noisy_loss_step(~is_switch,:,:),[1,3]);
+
+            if isfield(d.condition_set, 'switch2')
+                is_switch1 = d.condition_set.switch1==1;
+                is_switch = d.condition_set.switch2==1;
+                clean_step_switch2(ff,:) = mean(d.clean_loss_step(is_switch & ~is_switch1,:,:),[1,3]);
+                clean_step_repeat2(ff,:) = mean(d.clean_loss_step(~is_switch & ~is_switch1,:,:),[1,3]);
+                noisy_step_switch2(ff,:) = mean(d.noisy_loss_step(is_switch & ~is_switch1,:,:),[1,3]);
+                noisy_step_repeat2(ff,:) = mean(d.noisy_loss_step(~is_switch & ~is_switch1,:,:),[1,3]);
+            end
+
+            if isfield(d.condition_set, 'size_context1')
+
+                is_switch = d.condition_set.switch1==1;
+                is_size = d.condition_set.size_context1 | d.condition_set.location_context1;
+                was_size = d.condition_set.size_context0 | d.condition_set.location_context0;
+
+                clean_size_step(ff,:) = mean(d.clean_loss_step(is_size,:,:),[1,3]);
+                noisy_size_step(ff,:) = mean(d.noisy_loss_step(is_size,:,:),[1,3]);
+
+                clean_step_size_switch1(ff,:) = mean(d.clean_loss_step(was_size & is_size & is_switch,:,:),[1,3]);
+                clean_step_size_repeat1(ff,:) = mean(d.clean_loss_step(was_size & is_size & ~is_switch,:,:),[1,3]);
+                noisy_step_size_switch1(ff,:) = mean(d.noisy_loss_step(was_size & is_size & is_switch,:,:),[1,3]);
+                noisy_step_size_repeat1(ff,:) = mean(d.noisy_loss_step(was_size & is_size & ~is_switch,:,:),[1,3]);
+
+                clean_step_wassize_switch1(ff,:) = mean(d.clean_loss_step(was_size & is_switch,:,:),[1,3]);
+                clean_step_wassize_repeat1(ff,:) = mean(d.clean_loss_step(was_size & ~is_switch,:,:),[1,3]);
+                noisy_step_wassize_switch1(ff,:) = mean(d.noisy_loss_step(was_size & is_switch,:,:),[1,3]);
+                noisy_step_wassize_repeat1(ff,:) = mean(d.noisy_loss_step(was_size & ~is_switch,:,:),[1,3]);
+
+                clean_step_notsize_switch1(ff,:) = mean(d.clean_loss_step(~was_size & ~is_size & is_switch,:,:),[1,3]);
+                clean_step_notsize_repeat1(ff,:) = mean(d.clean_loss_step(~was_size & ~is_size & ~is_switch,:,:),[1,3]);
+                noisy_step_notsize_switch1(ff,:) = mean(d.noisy_loss_step(~was_size & ~is_size & is_switch,:,:),[1,3]);
+                noisy_step_notsize_repeat1(ff,:) = mean(d.noisy_loss_step(~was_size & ~is_size & ~is_switch,:,:),[1,3]);
+
+            end
+
+        end
+
+
+        % save
+        if isfield(dii.condition_set, 'size_context1')
+
+            all_clean_step_notsize_switch1{ii} = clean_step_notsize_switch1;
+            all_clean_step_notsize_repeat1{ii} = clean_step_notsize_repeat1;
+
+            all_clean_step_size_switch1{ii} = clean_step_size_switch1;
+            all_clean_step_size_repeat1{ii} = clean_step_size_repeat1;
+
+            all_noisy_step_notsize_switch1{ii} = noisy_step_notsize_switch1;
+            all_noisy_step_notsize_repeat1{ii} = noisy_step_notsize_repeat1;
+
+            all_noisy_step_size_switch1{ii} = noisy_step_size_switch1;
+            all_noisy_step_size_repeat1{ii} = noisy_step_size_repeat1;
+        end
+
+
+        % loss over iterations
+        nexttile(1); hold on;
+        plt{1}(ii)=plot(-mean(log(noisy_loss)), '-', 'color', cols{ii}, 'LineWidth', 3);
+
+        nexttile(2); hold on;
+        plt{2}(ii)=plot(-mean(log(clean_loss)), '-', 'color', cols{ii}, 'LineWidth', 3);
+
+
+        % loss per timestep
+        nnet = sum(isfinite(noisy_step(1,:)),1);
+        nstep = sum(isfinite(noisy_step(1,:)),2);
+        [sel1, sel2, sel3] = deal(find(all(isfinite(nanmean(log(noisy_step))),1)));
+        sel1 = sel1(sel1<=70);
+        sel2 = sel2(sel2>(70+iti) & sel2 <=(140+iti));
+        sel3 = sel3(sel3>(140+2*iti));
+        switch n_trials
+            case 2
+                sel = [sel1; sel2];
+
+            case 3
+                sel = [sel1; sel2; sel3];
+        end
+
+
+        nexttile(3); hold on;
+        for jj = 1:size(sel,1)
+            plt{1}(ii)=errorarea(sel(jj,:), -nanmean(log(noisy_step(:,sel(jj,:)))), sem(log(noisy_step(:,sel(jj,:)))), sem(log(noisy_step(:,sel(jj,:)))), 'color', cols{ii}, 'LineWidth', 2);
+        end
+
+        nexttile(4); hold on;
+        for jj = 1:size(sel,1)
+            plt{2}(ii)=errorarea(sel(jj,:), -nanmean(log(clean_step(:,sel(jj,:)))), sem(log(clean_step(:,sel(jj,:)))), sem(log(clean_step(:,sel(jj,:)))), 'color', cols{ii}, 'LineWidth', 2);
+        end
+
+
+
+
+
+
+        % switch vs repeat ==========================================
+        nexttile(5); hold on;
+
+        for jj = 1:size(sel,1)
+
+            if plot_sw_diff
+
+                noisy_step_diff = log(noisy_step_switch1(:,sel(jj,:))) - log(noisy_step_repeat1(:,sel(jj,:)));
+                plt{5}(ii)=errorarea(sel(jj,:), -nanmean(noisy_step_diff)', sem(noisy_step_diff)', sem(noisy_step_diff)', 'color', cols{ii}, 'LineWidth', 2);
+
+            else
+                plt{5}(ii)=errorarea(sel(jj,:),...
+                    -nanmean(log(noisy_step_repeat1(:,sel(jj,:))))',...
+                    sem(log(noisy_step_repeat1(:,sel(jj,:))))', sem(log(noisy_step_repeat1(:,sel(jj,:))))',...
+                    '-','color', cols{ii}, 'LineWidth', 2);
+
+                errorarea(sel(jj,:),...
+                    -nanmean(log(noisy_step_switch1(:,sel(jj,:))))',...
+                    sem(log(noisy_step_switch1(:,sel(jj,:))))', sem(log(noisy_step_switch1(:,sel(jj,:))))',...
+                    '--','color', cols{ii}, 'LineWidth', 2);
+            end
+
+            if n_trials==3
+                noisy_step_diff = log(noisy_step_switch2(:,sel(jj,:))) - log(noisy_step_repeat2(:,sel(jj,:)));
+                errorarea(sel(jj,:), -nanmean(noisy_step_diff)', sem(noisy_step_diff)', sem(noisy_step_diff)', '--', 'color', cols{ii}, 'LineWidth', 2);
+            end
+        end
+        % yline(0)
+
+
+        nexttile(6); hold on;
+        for jj = 1:size(sel,1)
+
+            if plot_sw_diff
+
+                clean_step_diff = log(clean_step_switch1(:,sel(jj,:))) - log(clean_step_repeat1(:,sel(jj,:)));
+                plt{6}(ii)=errorarea(sel(jj,:), -nanmean(clean_step_diff), sem(clean_step_diff), sem(clean_step_diff), 'color', cols{ii}, 'LineWidth', 2);
+
+            else
+
+                plt{6}(ii)=errorarea(sel(jj,:),...
+                    -nanmean(log(clean_step_repeat1(:,sel(jj,:))))',...
+                    sem(log(clean_step_repeat1(:,sel(jj,:))))', sem(log(clean_step_repeat1(:,sel(jj,:))))',...
+                    '-','color', cols{ii}, 'LineWidth', 2);
+
+                errorarea(sel(jj,:),...
+                    -nanmean(log(clean_step_switch1(:,sel(jj,:))))',...
+                    sem(log(clean_step_switch1(:,sel(jj,:))))', sem(log(clean_step_switch1(:,sel(jj,:))))',...
+                    '--','color', cols{ii}, 'LineWidth', 2);
+
+            end
+
+            if n_trials==3
+                clean_step_diff = log(clean_step_switch2(:,sel(jj,:))) - log(clean_step_repeat2(:,sel(jj,:)));
+                errorarea(sel(jj,:), -nanmean(clean_step_diff), sem(clean_step_diff), sem(clean_step_diff), '--', 'color', cols{ii}, 'LineWidth', 2);
+            end
+
+        end
+        % yline(0)
+
+
+        % AGGREGATE switch vs repeat ==========================================
+
+        for jj = 1:size(sel,1)
+            agg_loglik{jj,ii,mm} = -nanmean(log(clean_step(:,sel(jj,:))),2);
+
+            if isfield(dii.condition_set, 'size_context1')
+                agg_loglik_switch1{jj,ii,mm} = -nanmean(log(clean_step_size_switch1(:,sel(jj,:))),2);
+                agg_loglik_repeat1{jj,ii,mm} = -nanmean(log(clean_step_size_repeat1(:,sel(jj,:))),2);
+            else
+
+                agg_loglik_switch1{jj,ii,mm} = -nanmean(log(clean_step_switch1(:,sel(jj,:))),2);
+                agg_loglik_repeat1{jj,ii,mm} = -nanmean(log(clean_step_repeat1(:,sel(jj,:))),2);
+                if n_trials==3
+                    agg_loglik_switch2{jj,ii,mm} = -nanmean(log(clean_step_switch2(:,sel(jj,:))),2);
+                    agg_loglik_repeat2{jj,ii,mm} = -nanmean(log(clean_step_repeat2(:,sel(jj,:))),2);
+                end
+            end
+        end
+
+
+
+
+        if isfield(dii.condition_set, 'size_coh0')
+
+            nexttile(7); hold on;
+            for jj = 1:size(sel,1)
+                plt{2}(ii)=errorarea(sel(jj,:), -nanmean(log(clean_size_step(:,sel(jj,:)))), sem(log(clean_size_step(:,sel(jj,:)))), sem(log(clean_size_step(:,sel(jj,:)))), 'color', cols{ii}, 'LineWidth', 2);
+            end
+
+            nexttile(8); hold on;
+            clean_step_diff = log(clean_step_size_switch1(:,sel(jj,:))) - log(clean_step_size_repeat1(:,sel(jj,:)));
+            plt{6}(ii)=errorarea(sel(jj,:), -nanmean(clean_step_diff), sem(clean_step_diff), sem(clean_step_diff), 'color', cols{ii}, 'LineWidth', 2);
+
+            if n_trials==3
+                clean_step_diff = log(clean_step_size_switch2(:,sel(jj,:))) - log(clean_step_size_repeat2(:,sel(jj,:)));
+                errorarea(sel(jj,:), -nanmean(clean_step_diff), sem(clean_step_diff), sem(clean_step_diff), '--', 'color', cols{ii}, 'LineWidth', 2);
+            end
+
+
+
+            % switch (not size)
+            nexttile(9); hold on;
+
+            plt{5}(ii)=errorarea(sel(jj,:),...
+                -nanmean(log(clean_step_notsize_repeat1(:,sel(jj,:))))',...
+                sem(log(clean_step_notsize_repeat1(:,sel(jj,:))))', sem(log(clean_step_notsize_repeat1(:,sel(jj,:))))',...
+                '-','color', cols{ii}, 'LineWidth', 2);
+
+            errorarea(sel(jj,:),...
+                -nanmean(log(clean_step_notsize_switch1(:,sel(jj,:))))',...
+                sem(log(clean_step_notsize_switch1(:,sel(jj,:))))', sem(log(clean_step_notsize_switch1(:,sel(jj,:))))',...
+                '--','color', cols{ii}, 'LineWidth', 2);
+
+            ylim([0, 1.4]);
+
+
+            % switch (is size)
+            nexttile(10); hold on;
+
+            plt{5}(ii)=errorarea(sel(jj,:),...
+                -nanmean(log(clean_step_size_repeat1(:,sel(jj,:))))',...
+                sem(log(clean_step_size_repeat1(:,sel(jj,:))))', sem(log(clean_step_size_repeat1(:,sel(jj,:))))',...
+                '-','color', cols{ii}, 'LineWidth', 2);
+
+            errorarea(sel(jj,:),...
+                -nanmean(log(clean_step_size_switch1(:,sel(jj,:))))',...
+                sem(log(clean_step_size_switch1(:,sel(jj,:))))', sem(log(clean_step_size_switch1(:,sel(jj,:))))',...
+                '--','color', cols{ii}, 'LineWidth', 2);
+
+            ylim([0, 1.4]);
+
+
+            % switch (was size)
+            nexttile(11); hold on;
+
+            plt{5}(ii)=errorarea(sel(jj,:),...
+                -nanmean(log(clean_step_wassize_repeat1(:,sel(jj,:))))',...
+                sem(log(clean_step_wassize_repeat1(:,sel(jj,:))))', sem(log(clean_step_wassize_repeat1(:,sel(jj,:))))',...
+                '-','color', cols{ii}, 'LineWidth', 2);
+
+            errorarea(sel(jj,:),...
+                -nanmean(log(clean_step_wassize_switch1(:,sel(jj,:))))',...
+                sem(log(clean_step_wassize_switch1(:,sel(jj,:))))', sem(log(clean_step_wassize_switch1(:,sel(jj,:))))',...
+                '--','color', cols{ii}, 'LineWidth', 2);
+
+            ylim([0, 1.4]);
+
+
+
+        end
+
+
+
+    end
+
+
+
+
+    plt_titles = {...
+        'noisy loss','clean loss',...
+        'noisy step', 'clean step',...
+        'noisy switch', 'clean switch',...
+        'clean loss (size)', 'clean switch (size)', 'clean switch (not size)', 'clean switch (size)', 'clean switch (was size)'};
+
+    if isfield(dii.condition_set, 'size_coh0')
+        n_plt = length(plt_titles)
+    else
+        n_plt=6;
+    end
+
+    for pl = 1:n_plt
+
+        nexttile(pl);
+        title(plt_titles{pl});
+        set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+        % legend(plt{pl}, mdls, 'Location','best');
+        xlabel('training iterations')
+        ylabel('- log loss')
+
+        if pl>2
+            xlim([tsel(1), tsel(end)])
+            xlabel('timestep')
+
+        end
+
+    end
+
+    set(gcf, 'Renderer', 'Painters')
+
+
+    % plot switch difference
+    if isfield(dii.condition_set, 'size_context0')
+
+        nexttile; hold on;
+
+
+        repeat_con = nanmean(log(all_clean_step_size_repeat1{1})) - nanmean(log(all_clean_step_size_repeat1{2}));
+        plot((repeat_con), '-b', 'LineWidth', 2)
+
+
+        switch_con = nanmean(log(all_clean_step_size_switch1{1})) - nanmean(log(all_clean_step_size_switch1{2}));
+        plot((switch_con), '-r', 'LineWidth', 2)
+
+
+        set(gca, "tickDir", 'out', 'LineWidth', 1.5)
+
+        yline(0)
+
+        legend({'repeat', 'switch'}, 'Location','south')
+        ylabel('Mixed - Single (-log loss)')
+
+
+
+        sum_repeat_1 = -nansum(log(all_clean_step_notsize_repeat1{1}(:,sel(2,:))),2);
+        sum_repeat_2 = -nansum(log(all_clean_step_notsize_repeat1{2}(:,sel(2,:))),2);
+
+        sum_switch_1 = -nansum(log(all_clean_step_notsize_switch1{1}(:,sel(2,:))),2);
+        sum_switch_2 = -nansum(log(all_clean_step_notsize_switch1{2}(:,sel(2,:))),2);
+
+
+
+        [~,p_repeat,cib_repeat,stats_repeat] = ttest2(sum_repeat_1, sum_repeat_2);
+        fprintf('\nnot size repeat: d=%.3g, ci=[%.2g, %.2g], p=%.2g', mean(sum_repeat_1-sum_repeat_2)/std(sum_repeat_1-sum_repeat_2), cib_repeat(1), cib_repeat(2), p_repeat);
+        [~,p_switch,ci_switch,stats_switch] = ttest2(sum_switch_1, sum_repeat_2);
+        fprintf('\nnot size switch: d=%.3g, ci=[%.2g, %.2g], p=%.2g\n', mean(sum_switch_1-sum_repeat_2)/std(sum_switch_1-sum_repeat_2), ci_switch(1), ci_switch(2), p_switch);
+
+
+
+
+        sum_repeat_1 = -nansum(log(all_clean_step_size_repeat1{1}(:,sel(2,:))),2);
+        sum_repeat_2 = -nansum(log(all_clean_step_size_repeat1{2}(:,sel(2,:))),2);
+
+        sum_switch_1 = -nansum(log(all_clean_step_size_switch1{1}(:,sel(2,:))),2);
+        sum_switch_2 = -nansum(log(all_clean_step_size_switch1{2}(:,sel(2,:))),2);
+
+
+        [~,p_repeat,cib_repeat,stats_repeat] = ttest2(sum_repeat_1, sum_repeat_2);
+        fprintf('\nclean size repeat: d=%.2g, ci=[%.3g, %.2g], p=%.2g', mean(sum_repeat_1-sum_repeat_2)/std(sum_repeat_1-sum_repeat_2), cib_repeat(1), cib_repeat(2), p_repeat);
+        [~,p_switch,ci_switch,stats_switch] = ttest2(sum_switch_1, sum_switch_2);
+        fprintf('\nclean size switch: d=%.2g, ci=[%.3g, %.2g], p=%.2g\n', mean(sum_switch_1-sum_switch_2)/std(sum_switch_1-sum_switch_2), ci_switch(1), ci_switch(2), p_switch);
+
+
+        sum_repeat_1 = -nansum(log(all_noisy_step_size_repeat1{1}(:,sel(2,:))),2);
+        sum_repeat_2 = -nansum(log(all_noisy_step_size_repeat1{2}(:,sel(2,:))),2);
+
+        sum_switch_1 = -nansum(log(all_noisy_step_size_switch1{1}(:,sel(2,:))),2);
+        sum_switch_2 = -nansum(log(all_noisy_step_size_switch1{2}(:,sel(2,:))),2);
+
+
+        [~,p_repeat,cib_repeat,stats_repeat] = ttest2(sum_repeat_1, sum_repeat_2);
+        fprintf('\nnoisy size repeat: d=%.2g, ci=[%.3g, %.2g], p=%.2g', mean(sum_repeat_1-sum_repeat_2)/std(sum_repeat_1-sum_repeat_2), cib_repeat(1), cib_repeat(2), p_repeat);
+        [~,p_switch,ci_switch,stats_switch] = ttest2(sum_switch_1, sum_switch_2);
+        fprintf('\nnoisy size switch: d=%.2g, ci=[%.3g, %.2g], p=%.2g\n', mean(sum_switch_1-sum_switch_2)/std(sum_switch_1-sum_switch_2), ci_switch(1), ci_switch(2), p_switch);
+
+
+    end
+
+end
+
+
+set(gcf, 'Renderer', 'painters')
+
+
+
+
+% PLOT STATS
+% agg_loglik{trial, 1-trial vs 2-trial, short ITI vs long ITI}
+if length(iti_list) > 1
+    for jj = 1:size(agg_loglik,1)
+
+        [~,p,~,stats] = ttest2(agg_loglik{jj,1,1}, agg_loglik{jj,1,2});
+        fprintf('\nmodel %d / trial %d t = %.2g, d = %.2g, p = %.2g', 1, jj, stats.tstat, stats.tstat/sqrt(512), p);
+        [~,p,~,stats] = ttest2(agg_loglik{jj,2,1}, agg_loglik{jj,2,2});
+        fprintf('\nmodel %d / trial %d t = %.2g, d = %.2g, p = %.2g',2, jj, stats.tstat, stats.tstat/sqrt(512), p);
+
+        for mm = 1:size(agg_loglik,3)
+            [~,p,~,stats] = ttest2(agg_loglik{jj,1,mm}, agg_loglik{jj,2,mm});
+            fprintf('\nITI %d / trial %d t = %.2g, d = %.2g, p = %.2g', iti_list(mm), jj, stats.tstat, stats.tstat/sqrt(512), p);
+        end
+    end
+end
+
+
+[~,p,~,stats] = ttest(agg_loglik{2,1,1}-agg_loglik{2,1,2})
+[~,p,~,stats] = ttest(agg_loglik{2,2,1}-agg_loglik{2,2,2})
+
+
+
+long_y = [agg_loglik{2,1,1}; agg_loglik{2,1,2}; agg_loglik{2,2,1};agg_loglik{2,2,2}];
+long_x = kron(eye(4),ones(512,1));
+mdl=fitlm(long_x,long_y, 'intercept', false)
+
+[P,F,R] = coefTest(mdl, [-1,1,-1,1])
+d = sqrt([F * (1024 + 1024) / (1024 * 1024)])
+[P,F,R] = coefTest(mdl, [-1,1,1,-1])
+
+
+
+long_y = [agg_loglik{2,1,1}; agg_loglik{2,1,2}; agg_loglik{2,2,1};agg_loglik{2,2,2}];
+long_x = kron(eye(4),ones(512,1));
+% long_x = [long_x(:,1)-long_x(:,2) + long_x(:,3)-long_x(:,4)];
+long_x = [long_x(:,1)-long_x(:,2) + long_x(:,4)-long_x(:,3)];
+mdl=fitlm(long_x,long_y)
+
+
+
+[~,p,~,stats]=ttest2(...
+    [agg_loglik{2,1,1}; agg_loglik{2,2,1}],...
+    [agg_loglik{2,1,2}; agg_loglik{2,2,2}]...
+    )
+d = stats.tstat * sqrt(1/1024 + 1/1024)
+d = 2*stats.tstat / sqrt(stats.df)
+
+
+
+[~,p,~,stats]=ttest2(...
+    agg_loglik{2,2,1},...
+    agg_loglik{2,2,2}...
+    )
+d = 2*stats.tstat / sqrt(stats.df)
+
+
+
+
+
+
+
+
+figure; hold on;
+
+% aggregate
+nexttile; hold on;
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+
+offset_ii = [-.1, .1];
+offset_mm = [-.05, .05];
+
+for mm = 1:size(agg_loglik,3)
+
+    for jj=1:size(agg_loglik,1)
+
+
+        for ii = 1:size(agg_loglik,2)
+
+            if mm == 1
+                cols = {[.5,.5,.5], [0,1,0], [0,0,1], [1,0,0], [1,1,0], [1,0,1], [0,1,1]};
+            else
+                cols = {[0,0,0], [0,1,0]*.50, [0,0,1]*.50, [1,0,0]*.50, [1,1,0]*.50, [1,0,1]*.50, [0,1,1]*.50};
+            end
+
+            errorbar(jj + offset_ii(ii) + offset_mm(mm), ...
+                nanmedian(agg_loglik{jj,ii,mm}), ...
+                abs(prctile(agg_loglik{jj,ii,mm}, 25) - nanmedian(agg_loglik{jj,ii,mm})),...
+                abs(prctile(agg_loglik{jj,ii,mm}, 75) - nanmedian(agg_loglik{jj,ii,mm})),...
+                'o', 'MarkerFaceColor', cols{ii}, 'color', cols{ii}, 'LineWidth', 2, 'MarkerSize', 12);
+
+        end
+    end
+end
+xticks([])
+
+
+
+% aggregate
+nexttile; hold on;
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+yline(0, '-k', 'LineWidth', 1.5)
+
+offset_ii = [-.1, .1];
+offset_mm = [-.05, .05];
+
+for mm = 1:size(agg_loglik,3)
+
+    for jj=1:size(agg_loglik,1)
+
+
+        for ii = 1:size(agg_loglik,2)
+
+            if mm == 1
+                cols = {[.5,.5,.5], [0,1,0], [0,0,1], [1,0,0], [1,1,0], [1,0,1], [0,1,1]};
+            else
+                cols = {[0,0,0], [0,1,0]*.50, [0,0,1]*.50, [1,0,0]*.50, [1,1,0]*.50, [1,0,1]*.50, [0,1,1]*.50};
+            end
+
+            if jj == 3
+                loglik_diff = agg_loglik_switch2{jj,ii,mm}-agg_loglik_repeat2{jj,ii,mm};
+            else
+                loglik_diff = agg_loglik_switch1{jj,ii,mm}-agg_loglik_repeat1{jj,ii,mm};
+            end
+
+            [~,p] = ttest(loglik_diff);
+            fprintf('\n%.2g',p)
+
+            errorbar(jj + offset_ii(ii) + offset_mm(mm), ...
+                nanmedian(loglik_diff), ...
+                abs(prctile(loglik_diff, 25) - nanmedian(loglik_diff)),...
+                abs(prctile(loglik_diff, 75) - nanmedian(loglik_diff)),...
+                'o', 'MarkerFaceColor', cols{ii}, 'color', cols{ii}, 'LineWidth', 2, 'MarkerSize', 12);
+
+        end
+    end
+end
+
+xticks([])
+set(gcf, 'Renderer', 'painters')
+
+
+
+
+
+
+
+% aggregate (4 TASK)
+if isfield(dii.condition_set, 'size_context0')
+
+    figure; hold on;
+    nexttile; hold on;
+    set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+    yline(0, '-k', 'LineWidth', 1.5)
+
+    offset_ii = [-.1, .1];
+    offset_mm = [-.05, .05];
+
+    for mm = 1:2
+
+        for jj=1:size(agg_loglik,1)
+
+
+            for ii = 1:size(agg_loglik,2)
+
+                if mm == 1
+                    cols = {[.5,.5,.5], [0,1,0], [0,0,1], [1,0,0], [1,1,0], [1,0,1], [0,1,1]};
+                else
+                    cols = {[0,0,0], [0,1,0]*.50, [0,0,1]*.50, [1,0,0]*.50, [1,1,0]*.50, [1,0,1]*.50, [0,1,1]*.50};
+                end
+
+                if mm ==1
+                    loglik_diff = agg_loglik_switch1{jj,ii};
+                else
+                    loglik_diff = agg_loglik_repeat1{jj,ii};
+                end
+
+                [~,p] = ttest(loglik_diff);
+                fprintf('\n%.2g',p)
+
+                errorbar(jj + offset_ii(ii) + offset_mm(mm), ...
+                    nanmedian(loglik_diff), ...
+                    abs(prctile(loglik_diff, 25) - nanmedian(loglik_diff)),...
+                    abs(prctile(loglik_diff, 75) - nanmedian(loglik_diff)),...
+                    'o', 'MarkerFaceColor', cols{ii}, 'color', cols{ii}, 'LineWidth', 2, 'MarkerSize', 12);
+
+            end
+        end
+    end
+
+    xticks([])
+    set(gcf, 'Renderer', 'painters')
+
+
+
+
+    nexttile; hold on;
+
+    sum_repeat_1 = -nansum(log(all_clean_step_size_repeat1{1}(:,sel(2,:))),2);
+    sum_repeat_2 = -nansum(log(all_clean_step_size_repeat1{2}(:,sel(2,:))),2);
+
+    sum_switch_1 = -nansum(log(all_clean_step_size_switch1{1}(:,sel(2,:))),2);
+    sum_switch_2 = -nansum(log(all_clean_step_size_switch1{2}(:,sel(2,:))),2);
+
+    sums = [sum_repeat_1,sum_switch_1];
+
+
+    errorbar([.5,2], ...
+        nanmedian(sums), ...
+        abs(prctile(sums, 25) - nanmedian(sums)),...
+        abs(prctile(sums, 75) - nanmedian(sums)),...
+        'o', 'MarkerFaceColor', 'k', 'color', 'k', 'LineWidth', 2, 'MarkerSize', 12);
+
+    sums = [sum_repeat_2,sum_switch_2];
+
+    errorbar([1,2.5], ...
+        nanmedian(sums), ...
+        abs(prctile(sums, 25) - nanmedian(sums)),...
+        abs(prctile(sums, 75) - nanmedian(sums)),...
+        'o', 'MarkerFaceColor', 'g', 'color', 'g', 'LineWidth', 2, 'MarkerSize', 12);
+
+    xlim([0,3])
+    xticks([.5,1,2,2.5])
+    xticklabels({'repeat-1', 'repeat-2', 'switch-1', 'switch-2'})
+end
+
+
+
+
+%% plot ablation knock-out
+
+
+
+
+
+% get models ============================
+
+
+% STANDARD 2-task
+% mdls = {...
+%     'NET-GRU_nsingle-0_nswitch-1000_nreps-150_ntrials-2__TASK-iti-20_cuegain-100',...
+%     'NET-RNN_nsingle-0_nswitch-1000_nreps-150_ntrials-2__TASK-iti-20_cuegain-100',...
+%     'NET-GRU-no-reset_nsingle-0_nswitch-1000_nreps-150_ntrials-2__TASK-iti-20_cuegain-100',...
+%     'NET-GRU-no-update_nsingle-0_nswitch-1000_nreps-150_ntrials-2__TASK-iti-20_cuegain-100',...
+%     }
+
+mdls = {...
+    'NET-GRU_nsingle-500_nswitch-500_nreps-150_ntrials-2_noise-100__TASK-iti-20_cuegain-100_loss',...
+    'NET-RNN_nsingle-500_nswitch-500_nreps-150_ntrials-2_noise-100__TASK-iti-20_cuegain-100_loss',...
+    'NET-GRU-no-reset_nsingle-500_nswitch-500_nreps-150_ntrials-2_noise-100__TASK-iti-20_cuegain-100_loss',...
+    'NET-GRU-no-update_nsingle-500_nswitch-500_nreps-150_ntrials-2_noise-100__TASK-iti-20_cuegain-100_loss',...
+    }
+
+
+
+
+
+
+tsel = 1:160;
+n_trials = 2;
+
+
+
+nmdl = length(mdls)
+
+
+% get files
+files = cell(0);
+for ii = 1:nmdl
+    files{ii} = dir(fullfile(fld, mdls{ii}, '*.mat'));
+end
+
+disp(files)
+
+
+
+
+% plot ===================================
+
+cols = {[0,0,0], [0,1,0], [0,0,1], [1,0,0], [1,1,0], [1,0,1], [0,1,1]};
+
+figure; hold on;
+
+
+
+yl = [inf,-inf];
+clear plt all_clean_step_size_switch1 all_clean_step_size_repeat1
+for ii = 1:nmdl
+
+    % load
+    dii = load(fullfile(files{ii}(1).folder, files{ii}(1).name));
+
+
+    %preallocate
+
+    [clean_loss, noisy_loss] = deal(nan(length(files{ii}), length(dii.noisy_loss)));
+    [clean_step, noisy_step, ...
+        clean_step_switch1, clean_step_repeat1, ...
+        noisy_step_switch1, noisy_step_repeat1,...
+        clean_step_size_switch1, clean_step_size_repeat1,...
+        noisy_step_size_switch1, noisy_step_size_repeat1,...
+        clean_step_wassize_switch1,clean_step_wassize_repeat1,...
+        noisy_step_wassize_switch1,noisy_step_wassize_repeat1,...
+        clean_step_notsize_switch1,clean_step_notsize_repeat1,...
+        noisy_step_notsize_switch1,noisy_step_notsize_repeat1,...
+        ] = deal(nan(length(files{ii}), size(dii.noisy_loss_step,2)));
+
+    parfor ff = 1:length(files{ii})
+
+
+        try
+
+            d=load(fullfile(files{ii}(ff).folder, files{ii}(ff).name),...
+                'clean_loss', 'noisy_loss',...
+                'clean_loss_step', 'noisy_loss_step',...
+                'condition_set');
+
+
+            d.clean_loss;
+        catch
+            continue;
+        end
+
+        clean_loss(ff, :) = d.clean_loss;
+        noisy_loss(ff, :) = d.noisy_loss;
+
+
+    end
+
+
+    % save
+    if isfield(dii.condition_set, 'size_context1')
+
+        all_clean_step_size_switch1{ii} = clean_step_size_switch1;
+        all_clean_step_size_repeat1{ii} = clean_step_size_repeat1;
+    end
+
+
+    % loss over iterations
+    tsel = 2:1000;
+    log_clean = -median(log(clean_loss(:,tsel)));
+    log_noisy = -median(log(noisy_loss(:,tsel)));
+    log_clean_prct = -prctile(log(clean_loss(:,tsel)), [25, 75]);
+    log_noisy_prct = -prctile(log(noisy_loss(:,tsel)), [25, 75]);
+
+    nexttile(1); hold on;
+    plt{2}(ii)=plot(tsel, log_noisy, '-', 'color', cols{ii}, 'LineWidth', 2);
+    % plt{1}(ii)=errorarea(tsel, log_noisy, abs(log_noisy_prct(1,:)-log_noisy), abs(log_noisy_prct(2,:)-log_noisy), '-', 'color', cols{ii}, 'LineWidth', 2);
+
+
+    nexttile(2); hold on;
+    plt{1}(ii)=plot(tsel, log_clean,  '-', 'color', cols{ii}, 'LineWidth', 2);
+    % plt{1}(ii)=errorarea(tsel, log_clean, abs(log_clean_prct(1,:)-log_clean), abs(log_clean_prct(2,:)-log_clean), '-', 'color', cols{ii}, 'LineWidth', 2);
+
+
+
+end
+
+
+nexttile(1);
+title('training loss')
+xline(500)
+xlim([0, max(tsel)])
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+ylim([.5,2])
+% ylim([0,.4])
+
+nexttile(2);
+title('clean 2-task loss')
+xline(500)
+xlim([0, max(tsel)])
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+ylim([.5,2])
+% ylim([0,.4])
+
+%
+% legend(plt{1}, {'GRU', 'RNN', 'no-reset', 'no-update'})
+% legend(plt{2}, {'GRU', 'RNN', 'no-reset', 'no-update'})
+
+
+set(gcf, 'Renderer', 'painters')
+
+
+
+
+
+
+
+
+
+%% PLOT SVD trajectories (TASK 2)
+
+
+
+net_id = 4 % 4 20 60
+vs = [1,2,3]; % plotting dims
+
+same_embed = false
+fitinit = false
+new_svd = true
+
+plot_iti = '20';
+
+switch plot_iti
+
+    case '20'
+
+        if ~fitinit
+            mdls = {...
+                'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100__TASK-iti-20_cuegain-100',...
+                'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100__TASK-iti-20_cuegain-100',...
+                };
+        else
+            mdls = {...
+                'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100_savewt-1_fitinit-1__TASK-iti-20_cuegain-100_ssm',...
+                'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100_savewt-1_fitinit-1__TASK-iti-20_cuegain-100_ssm',...
+                };
+        end
+
+        if same_embed ==1
+            view_set = [-219.4981;10.5261];
+        else
+            view_set = [74.9720,13.7082];
+        end
+
+        view_set = [-98.7836,  9.5888];
+
+
+
+
+
+
+    case '60'
+
+        if ~fitinit
+            mdls = {...
+                'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100__TASK-iti-60_cuegain-100_ssm',...
+                'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100__TASK-iti-60_cuegain-100_ssm',...
+                };
+        else
+
+            mdls = {...
+                'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100_savewt-1_fitinit-1__TASK-iti-60_cuegain-100_ssm',...
+                'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100_savewt-1_fitinit-1__TASK-iti-60_cuegain-100_ssm',...
+                };
+        end
+
+        view_set = [-453.0727,4.7573];
+        view_set = [-447.1384,0.7777];
+        view_set = [  -98.7836,  9.5888];
+        % view_set = [  -99,  34];
+        %         view_set = [-119.4629,  33.4331]
+
+
+
+end
+
+
+% SET VIEW HERE
+switch net_id
+    case 4
+        if same_embed
+            view_set = [-72.0019,  29.4167]
+        else
+            view_set = [-119.4629,  33.4331]
+        end
+end
+
+
+
+
+
+
+nmdl = length(mdls)
+
+
+% get files
+files = cell(0);
+for ii = 1:nmdl
+    files{ii} = dir(fullfile(fld, mdls{ii}, '*.mat'));
+end
+
+disp(files)
+
+
+
+
+
+% 1-TRIAL MODEL
+d=load(fullfile(files{1}(net_id).folder, files{1}(net_id).name));
+sim = d.sim_conditions;
+
+x1 = d.sim_latents;
+[tl,tt,nn] = size(x1);
+lx = (reshape(x1, [tl*tt, nn]));
+
+% 2-TRIAL MODEL
+d=load(fullfile(files{2}(net_id).folder, files{2}(net_id).name));
+
+x2 = d.sim_latents;
+[tl,tt,nn] = size(x2);
+
+% combine
+if same_embed
+    lx = [lx; (reshape(x2, [tl*tt, nn]))];
+else
+    lx = [lx, (reshape(x2, [tl*tt, nn]))];
+end
+cx = {x1, x2};
+clear x1 x2
+
+
+% DO SVD
+if new_svd
+    disp('fitting SVD')
+    [~,~,V] = svds(double(lx),max(vs));
+    % V = pca(double(lx), 'NumComponents', max(vs));
+    disp('done fitting')
+end
+
+
+
+% create conditions
+xsel = [ones(nn,1); ones(nn,1)*2];
+
+cxt = [sim.motion_context0', sim.motion_context1'];
+cond = zeros(tl,1);
+cond(cxt(:,1)==0 & cxt(:,2)==0) =1;
+cond(cxt(:,1)==1 & cxt(:,2)==1) =2;
+cond(cxt(:,1)==0 & cxt(:,2)==1) =3;
+cond(cxt(:,1)==1 & cxt(:,2)==0) =4;
+
+
+
+
+
+
+
+% PLOT
+figure; hold on;
+
+clear panel
+nn=1;
+[panel_x, panel_y, panel_z] = deal([]);
+for ii = 1:length(mdls)
+
+    if same_embed==1
+        x1 = squeeze(mean(cx{ii}(cond==1,:,:),1))*V;
+        x2 = squeeze(mean(cx{ii}(cond==2,:,:),1))*V;
+        x3 = squeeze(mean(cx{ii}(cond==3,:,:),1))*V;
+        x4 = squeeze(mean(cx{ii}(cond==4,:,:),1))*V;
+    else
+        x1 = squeeze(mean(cx{ii}(cond==1,:,:),1))*V(xsel==ii,:);
+        x2 = squeeze(mean(cx{ii}(cond==2,:,:),1))*V(xsel==ii,:);
+        x3 = squeeze(mean(cx{ii}(cond==3,:,:),1))*V(xsel==ii,:);
+        x4 = squeeze(mean(cx{ii}(cond==4,:,:),1))*V(xsel==ii,:);
+    end
+
+
+    % plot SVD
+    task_seq1 = zeros(max(sim.events_on0),1);
+    task_seq1(sim.events_on0(3:5)) = 1;
+
+    task_seq2 = zeros(max(sim.events_on1),1);
+    task_seq2(sim.events_on1(3:6)) = 1;
+    iti_dur = sim.events_on1(1);
+
+
+    % PLOT
+
+
+    % PLOT repeat -------------------------
+    % sim.trial_sel1(find(sim.trial_sel1,1)-(1:2)) = 1;
+
+    panel(nn) = nexttile; hold on; nn=nn+1;
+    plot_3d(x1(sim.trial_sel0==1,vs)', 'r', task_seq1)
+    trial2 = x1(sim.trial_sel1==1,vs)';
+    plot_3d(trial2(:,1:iti_dur), 'k')
+    plot_3d(trial2(:,iti_dur:end), 'm', task_seq2(iti_dur+1:end))
+
+    plot_3d(x2(sim.trial_sel0==1,vs)', 'b', task_seq1)
+    trial2 = x2(sim.trial_sel1==1,vs)';
+    plot_3d(trial2(:,1:iti_dur), 'k')
+    plot_3d(trial2(:,iti_dur:end), 'c', task_seq2(iti_dur+1:end))
+
+    set(gca, 'TickDir', 'none', 'LineWidth', 1.5)
+    % h = gca;
+    % plot3(h.XLim, [0 0], [0 0], '-k', 'LineWidth', 1.5)
+    % plot3([0, 0], h.YLim, [0 0], '-k', 'LineWidth', 1.5);
+    % plot3([0, 0], [0 0], h.ZLim, '-k', 'LineWidth', 1.5);
+
+    grid('on');
+    title('REPEAT')
+
+    % set view
+    view(view_set(1), view_set(2));
+    axis('equal')
+
+    % save lims
+    panel_x = [panel_x; xlim];
+    panel_y = [panel_y; ylim];
+    panel_z = [panel_z; zlim];
+
+    % remove labels
+    xlabel('dim 1')
+    ylabel('dim 2')
+    zlabel('dim 3')
+
+
+    % PLOT switch -------------------------
+    panel(nn) = nexttile; hold on; nn=nn+1;
+    plot_3d(x3(sim.trial_sel0==1,vs)', 'r', task_seq1)
+    % plot_3d(x3(sim.trial_sel1==1,vs)', 'c', task_seq2)
+    trial2 = x3(sim.trial_sel1==1,vs)';
+    plot_3d(trial2(:,1:iti_dur), 'k')
+    plot_3d(trial2(:,iti_dur:end), 'c', task_seq2(iti_dur+1:end))
+
+    plot_3d(x4(sim.trial_sel0==1,vs)', 'b', task_seq1)
+    % plot_3d(x4(sim.trial_sel1==1,vs)', 'm', task_seq2)
+    trial2 = x4(sim.trial_sel1==1,vs)';
+    plot_3d(trial2(:,1:iti_dur), 'k')
+    plot_3d(trial2(:,iti_dur:end), 'm', task_seq2(iti_dur+1:end))
+
+    set(gca, 'TickDir', 'none', 'LineWidth', 1.5)
+    % xline(0, '-k', 'LineWidth', 1.5); yline(0, '-k', 'LineWidth', 1.5);
+    grid('on');
+    title('SWITCH')
+
+
+    % set view
+    view(view_set(1), view_set(2));
+    axis('equal')
+
+    % save lims
+    panel_x = [panel_x; xlim];
+    panel_y = [panel_y; ylim];
+    panel_z = [panel_z; zlim];
+
+    % remove labels
+    xlabel('dim 1')
+    ylabel('dim 2')
+    zlabel('dim 3')
+
+end
+
+panel_x_best = [min(panel_x(:,1)), max(panel_x(:,2))];
+panel_y_best = [min(panel_y(:,1)), max(panel_y(:,2))];
+panel_z_best = [min(panel_z(:,1)), max(panel_z(:,2))];
+% panel_z_best = [-4,2]
+
+for pp = 1:length(panel)
+
+    xlim(panel(pp), panel_x_best);
+    ylim(panel(pp), panel_y_best);
+    zlim(panel(pp), panel_z_best);
+    % axis(panel(pp),'equal')
+
+    plot3(panel(pp),panel_x_best,[0,0], [0,0], '-k', 'LineWidth', 1)
+    plot3(panel(pp),[0,0],panel_y_best, [0,0], '-k', 'LineWidth', 1)
+    plot3(panel(pp),[0,0],[0,0], panel_z_best,  '-k', 'LineWidth', 1)
+
+
+end
+
+
+
+
+set(gcf, 'Position', [100,100,1200,1000], 'Renderer', 'painters')
+
+
+
+
+
+
+
+
+
+%% ITI control
+
+
+nfiles = 512;
+
+
+cos_sim = @(x,y) normalize(x,1,'norm')'*normalize(y,1,'norm');
+
+logit = @(x) 1./(1+exp(-x));
+ilogit = @(x) log(x) - log(1-x)
+
+% main analysis
+mdls = {...
+    'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100_savewt-1__TASK-iti-60_cuegain-100_swapITI-1_ssm',...
+    'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100_savewt-1__TASK-iti-60_cuegain-100_ssm',...
+    'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100_savewt-1__TASK-iti-20_cuegain-100_swapITI-1_ssm',...
+    'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100_savewt-1__TASK-iti-20_cuegain-100_ssm',...
+    };
+
+% swap ITIs between training and test
+% mdls = {...
+%     'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100__TASK-iti-60_cuegain-100_swapITI-1_ssm',...
+%     'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100_savewt-1__TASK-iti-60_cuegain-100_ssm',...
+%     'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100__TASK-iti-20_cuegain-100_swapITI-1_ssm',...
+%     'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100_savewt-1__TASK-iti-20_cuegain-100_ssm',...
+%     };
+
+
+% fit initial conditions
+% mdls = {...
+%     'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100_savewt-1_fitinit-1__TASK-iti-60_cuegain-100_ssm',...
+%     'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100_savewt-1_fitinit-1__TASK-iti-60_cuegain-100_ssm',...
+%     'NET-GRU_nsingle-450_nswitch-50_nreps-150_ntrials-2_noise-100_savewt-1_fitinit-1__TASK-iti-20_cuegain-100_ssm',...
+%     'NET-GRU_nsingle-500_nswitch-0_nreps-150_ntrials-2_noise-100_savewt-1_fitinit-1__TASK-iti-20_cuegain-100_ssm',...
+%     };
+
+cols = {[0, .3, 0],[.3, .3, .3],'g','k'};
+names = {'mixed-60', 'single-60','mixed-20', 'single-20'}
+cur_task = 'neither'
+iti_lag = 0
+
+norm_dyn = 1
+
+do_perm = 0
+if do_perm
+    fprintf('\n -- DO PERM --\n')
+end
+
+nmdl = length(mdls)
+
+% gate_sel = 1:108;     % reset
+% gate_sel = 109:216;     % update
+% gate_sel = 217:324;   % recurrent
+
+
+% plot distance
+figure; hold on;
+set(gcf, 'Renderer', 'Painters')
+for nn = 1:12
+    nexttile(nn); hold on;
+end
+clear plt1 plt2 iti_len
+
+for mm = 1:nmdl
+
+    files = dir(fullfile(fld, mdls{mm}, '*.mat'));
+    disp(files);
+
+
+    d=load(fullfile(files(1).folder, files(1).name));
+    sim = d.sim_conditions;
+
+    prevTask = sim.motion_context0;
+    task = sim.motion_context1;
+    nseq = length(task);
+
+    iti_sel = (max(double(sim.events_on0))+1):(max(double(sim.events_on0))+sim.events_on1(1) + iti_lag);
+    dec_sel = sim.events_on0(2);
+    iti_len(mm) = length(iti_sel)
+    task_len(mm) = sim.events_on0(end)
+
+    t_cue_on = sim.events_on0(1)+1;
+    t_iti = sim.events_on0(2)+1;
+    t_trial = sim.events_on0(3)+1;
+
+    t_epoch1 =  1:sim.events_on0(end);
+
+
+    [h_dist, x_gate,...
+        x_h_task, x_up_task, x_re_task,...
+        x_h_mid,x_up_mid,x_re_mid,...
+        z_all, r_all, n_all,...
+        y_cost_new, y_cos_re, y_cos_up] = deal(nan(nfiles,iti_len(mm)));
+
+    sim_h = nan(task_len(mm), iti_len(mm), nfiles);
+
+    tic;
+    parfor ff = 1:nfiles
+
+        % load model
+        d=load(fullfile(files(ff).folder, files(ff).name),...
+            'sim_latents', ...
+            'recur_weight', ...
+            'recur_bias', ...
+            'in_weight', ...
+            'in_bias');
+
+        H = d.sim_latents;
+        X = zeros(2048,200,6);%d.sim_inputs;
+
+        weight_hh = d.recur_weight;
+        bias_ih  = d.in_bias;
+        bias_hh = d.recur_bias;
+        hidden_size = size(weight_hh,2);
+
+        switch cur_task
+            case 'switch'
+
+                h_1 = squeeze(mean(H(prevTask==0 & task==1, iti_sel,:)))';
+                h_2 = squeeze(mean(H(prevTask==1 & task==0, iti_sel,:)))';
+
+                x_1 = squeeze(mean(X(prevTask==0 & task==1, iti_sel,:)))';
+                x_2 = squeeze(mean(X(prevTask==1 & task==0, iti_sel,:)))';
+
+            case 'repeat'
+
+                h_1 = squeeze(mean(H(prevTask==0 & task==0, iti_sel,:)))';
+                h_2 = squeeze(mean(H(prevTask==1 & task==1, iti_sel,:)))';
+
+                x_1 = squeeze(mean(X(prevTask==0 & task==0, iti_sel,:)))';
+                x_2 = squeeze(mean(X(prevTask==1 & task==1, iti_sel,:)))';
+
+            case 'neither'
+
+                h_1 = squeeze(mean(H(prevTask==0, iti_sel,:)))';
+                h_2 = squeeze(mean(H(prevTask==1, iti_sel,:)))';
+
+                h_cue_on = repmat(squeeze(mean(H(:, t_cue_on,:))), [2, size(h_1,2)]);
+                h_iti = repmat(squeeze(mean(H(:, t_iti,:))), [2, size(h_1,2)]);
+                h_trial = repmat(squeeze(mean(H(:, t_trial,:))), [2, size(h_1,2)]);
+
+                h_epoch1 = squeeze(mean(H(:,t_epoch1,:),1))';
+
+
+                x_1 = squeeze(mean(X(prevTask==0, iti_sel,:)))';
+                x_2 = squeeze(mean(X(prevTask==1, iti_sel,:)))';
+
+            otherwise
+                error('incorrect cur_task')
+        end
+
+
+
+        % state distance
+        h_dist(ff,:) = log(vecnorm(h_1-h_2,1));
+        % % % h_dist(ff,:) = mean((rms(X(prevTask==0, iti_sel,:)-X(prevTask==1, iti_sel,:),3)));
+        % h_dist(ff,:) = log(.5*(tangvelocity(x_1') + tangvelocity(x_2')));
+
+        % gate-task alignment
+        switch cur_task
+            case 'switch'
+
+                task_diff  = ...
+                    squeeze(mean(H(prevTask==1 & task==0, iti_sel(1)-1,:))) -...
+                    squeeze(mean(H(prevTask==0 & task==1, iti_sel(1)-1,:)));
+
+            case 'repeat'
+                task_diff  = ...
+                    squeeze(mean(H(prevTask==1 & task==1, iti_sel(1)-1,:))) -...
+                    squeeze(mean(H(prevTask==0 & task==0, iti_sel(1)-1,:)));
+
+            case 'neither'
+
+                task_diff  = ...
+                    squeeze(mean(H(prevTask==1, iti_sel(1)-1,:))) -...
+                    squeeze(mean(H(prevTask==0, iti_sel(1)-1,:)));
+
+            otherwise
+                error('incorrect cur_task')
+        end
+
+        if norm_dyn == 1
+            task_diff = normalize(task_diff,1,'norm');
+        end
+
+
+        % get states
+        % h_targ = repmat([.5*(h_1(:,end) + h_2(:,end)); .5*(h_1(:,end) + h_2(:,end))], [1, size(h_1,2)]);
+        % h_targ = [[h_2(:,2:end), h_2(:,end)]; [h_1(:,2:end), h_1(:,end)]];
+        h_targ = h_trial;
+
+
+
+
+
+        % Extract biases for each gate
+        b_ir = bias_ih(1:hidden_size);
+        b_iz = bias_ih(hidden_size+1:2*hidden_size);
+        b_in = bias_ih(2*hidden_size+1:end);
+
+
+
+        % ----- h_1 -----------------------------------
+        % Compute W_hr * h, W_hz * h, and W_hn * h in one matrix multiplication
+        Wh = weight_hh*h_1 + bias_hh';  % (3*hidden_size x 1)
+
+        % Extract parts for each gate (reset, update, new)
+        Wb_hr = Wh(1:hidden_size,:)';
+        Wb_hz = Wh(hidden_size+1:2*hidden_size,:)';
+        Wb_hn = Wh(2*hidden_size+1:end,:)';
+
+        % Compute gate values according to PyTorch implementation
+        r_1 = logit(Wb_hr + b_ir);       % Reset gate
+        z_1 = logit(Wb_hz + b_iz);       % Update gate
+        if do_perm
+            r_1 = r_1(:,randperm(hidden_size));
+            z_1 = z_1(:,randperm(hidden_size));
+        end
+        n_1 = tanh(b_in + r_1.*Wb_hn);   % New gate
+
+        r_1 = r_1';
+        z_1 = z_1';
+        n_1 = n_1';
+
+
+        % ----- h_2 -----------------------------------
+        % Compute W_hr * h, W_hz * h, and W_hn * h in one matrix multiplication
+        Wh = weight_hh*h_2 + bias_hh';  % (3*hidden_size x 1)
+
+        % Extract parts for each gate (reset, update, new)
+        Wb_hr = Wh(1:hidden_size,:)';
+        Wb_hz = Wh(hidden_size+1:2*hidden_size,:)';
+        Wb_hn = Wh(2*hidden_size+1:end,:)';
+
+        % Compute gate values according to PyTorch implementation
+        r_2 = logit(Wb_hr + b_ir);       % Reset gate
+        z_2 = logit(Wb_hz + b_iz);       % Update gate
+        if do_perm
+            r_2 = r_2(:,randperm(hidden_size));
+            z_2 = z_2(:,randperm(hidden_size));
+        end
+        n_2 = tanh(b_in + r_2.*Wb_hn);   % New gate
+
+        r_2 = r_2';
+        z_2 = z_2';
+        n_2 = n_2';
+
+        n_all(ff,:) = log(vecnorm([n_1;n_2]));
+        r_all(ff,:) = log(vecnorm([r_1;r_2]));
+        z_all(ff,:) = log(vecnorm(1-[z_1;z_2]));
+
+
+
+        % cosine
+        y_cost_new(ff,:) = diag(cos_sim([n_1;n_2], h_targ));
+        y_cos_re(ff,:) = diag(cos_sim([r_1;r_2], h_targ));
+        y_cos_up(ff,:) = diag(cos_sim(1-[z_1;z_2], h_targ));
+
+        % y_cos_re(ff,:) = diag(cos_sim((1-[z_1;z_2]) .* [n_1;n_2], h_targ));
+
+
+        % distance
+        y_cost_new(ff,:) = log(vecnorm([h_1;h_2]-h_cue_on, 1));
+        y_cos_re(ff,:) = log(vecnorm([h_1;h_2]- h_iti, 1));
+        y_cos_up(ff,:) = log(vecnorm([h_1;h_2]- h_trial, 1));
+
+
+
+
+        % % corr
+        % y_cost_new(ff,:) = diag(corr([n_1;n_2], h_targ));
+        % y_cos_re(ff,:) = diag(corr([r_1;r_2], h_targ));
+        % y_cos_up(ff,:) = diag(corr(1-[z_1;z_2], h_targ));
+
+
+        % gate * norm(state)
+        % y_cos_new(ff,:) =  vecnorm([n_1;n_2] .* normalize(h_targ,1,'norm'));
+        % y_cos_re(ff,:) = vecnorm([r_1;r_2] .* normalize(h_targ,1,'norm'));
+        % y_cos_up(ff,:) = vecnorm((1-[z_1;z_2]) .* normalize(h_targ,1,'norm'));
+
+
+
+        % temp generalization
+        sim_h(:,:,ff) = cos_sim(h_1, h_epoch1)';
+
+    end
+
+    toc
+
+    nexttile(1)
+    plt1(mm) = errorarea(1:iti_len(mm), mean(h_dist),sem_wn(h_dist), sem_wn(h_dist), 'color', cols{mm}, 'LineWidth', 2);
+
+
+    nexttile(2)
+    plt2(mm) = errorarea(1:iti_len(mm), mean(n_all),sem_wn(n_all), sem_wn(n_all), '-', 'color', cols{mm}, 'LineWidth', 2);
+    plt2(mm) = errorarea(1:iti_len(mm), mean(z_all),sem_wn(z_all), sem_wn(z_all), '--', 'color', cols{mm}, 'LineWidth', 2);
+    plt2(mm) = errorarea(1:iti_len(mm), mean(r_all),sem_wn(r_all), sem_wn(r_all), ':', 'color', cols{mm}, 'LineWidth', 2);
+
+
+
+    nexttile(3)
+    plt5(mm) = errorarea(1:iti_len(mm), mean(n_all),sem_wn(n_all), sem_wn(n_all), '-', 'color', cols{mm}, 'LineWidth', 2);
+
+    nexttile(4)
+    plt3(mm) = errorarea(1:iti_len(mm), mean(z_all),sem_wn(z_all), sem_wn(z_all), '-', 'color', cols{mm}, 'LineWidth', 2);
+
+    nexttile(5)
+    plt4(mm) = errorarea(1:iti_len(mm), mean(r_all),sem_wn(r_all), sem_wn(r_all), '-', 'color', cols{mm}, 'LineWidth', 2);
+
+
+
+    nexttile(6); hold on;
+    plt6(mm) = errorarea(1:iti_len(mm), mean(y_cost_new), sem_wn(y_cost_new), sem_wn(y_cost_new), '-', 'color', cols{mm}, 'LineWidth', 2);
+
+    nexttile(7); hold on;
+    plt7(mm) = errorarea(1:iti_len(mm), mean(y_cos_re), sem_wn(y_cos_re), sem_wn(y_cos_re), '-', 'color', cols{mm}, 'LineWidth', 2);
+
+    nexttile(8); hold on;
+    plt8(mm) = errorarea(1:iti_len(mm), mean(y_cos_up), sem_wn(y_cos_up), sem_wn(y_cos_up), '-', 'color', cols{mm}, 'LineWidth', 2);
+
+
+    nexttile(8+mm); hold on;
+    imagesc(nanmean(sim_h,3)/std(sim_h,[],3));
+
+
+
+end
+
+
+
+nexttile(1)
+legend(plt1, names, 'Location', 'best')
+title('x dist')
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+xline(iti_len(1)-iti_lag, '-k', 'LineWidth', 1)
+xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+
+nexttile(2)
+legend(plt2, names, 'Location', 'best')
+title('x dist (normalized)')
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+yline(0, '-k', 'LineWidth', 1)
+xline(iti_len(1)-iti_lag, '-k', 'LineWidth', 1)
+xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+
+
+nexttile(3)
+legend(plt3, names, 'Location', 'best')
+title('new state scale')
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+xline(iti_len(1)-iti_lag, '-k', 'LineWidth', 1)
+xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+% yline(0, '-k', 'LineWidth', 1)
+
+
+nexttile(4)
+legend(plt4, names, 'Location', 'best')
+title('update gate scale')
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+xline(iti_len(1)-iti_lag, '-k', 'LineWidth', 1)
+xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+% yline(0, '-k', 'LineWidth', 1)
+
+
+nexttile(5)
+legend(plt5, names, 'Location', 'best')
+title('reset gate scale')
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+xline(iti_len(1)-iti_lag, '-k', 'LineWidth', 1)
+xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+% yline(0, '-k', 'LineWidth', 1)
+
+
+nexttile(6)
+% legend(plt6, names, 'Location', 'best')
+title('new-target alignment')
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+xline(iti_len(1)-iti_lag, '-k', 'LineWidth', 1)
+xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+% yline(0, '-k', 'LineWidth', 1)
+
+
+
+
+nexttile(7)
+% legend(plt6, names, 'Location', 'best')
+title('reset-converage alignment')
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+xline(iti_len(1)-iti_lag, '-k', 'LineWidth', 1)
+xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+% yline(0, '-k', 'LineWidth', 1)
+% ylim([.17, .22])
+
+
+
+nexttile(8)
+% legend(plt6, names, 'Location', 'best')
+title('update-converage alignment')
+set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+xline(iti_len(1)-iti_lag, '-k', 'LineWidth', 1)
+xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+% yline(0, '-k', 'LineWidth', 1)
+% ylim([.76, .81])
+
+
+for mm = 1:4
+
+    nexttile(8+mm)
+    % legend(plt6, names, 'Location', 'best')
+    title('update-converage alignment')
+    set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+    xline(iti_len(1)-iti_lag, '-k', 'LineWidth', 1)
+    xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+    % yline(0, '-k', 'LineWidth', 1)
+    % ylim([.76, .81])
+    colormap(vik)
+    title(names{mm})
+end
+
+
+% nexttile(7)
+% % legend(plt6, names, 'Location', 'best')
+% title('midpoint distance')
+% set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+% xline(iti_len(1)-iti_lag, '-k', 'LineWidth', 1)
+% xline(iti_len(3)-iti_lag, '-k', 'LineWidth', 1)
+%     yline(0, '-k', 'LineWidth', 1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%% SSM-RNN likelihood ========================================================================
+
+
+xmin = 114.3487
+xmax = 152.2581
+
+xmin + (xmax-xmin)*[.25, .75]
+
+
+ITI = 2060 % 20, 60
+
+if ITI == 20
+
+    mdls = {...
+        {...
+        'GRU_single500_switch0_150reps_ITI20_cue100_trial2_mixTrain16'...
+        'GRU_single500_switch0_150reps_ITI20_cue100_trial2_mixTrain40'...
+        'GRU_single500_switch0_150reps_ITI20_cue100_trial2_mixTrain64'...
+        'GRU_single500_switch0_150reps_ITI20_cue100_trial2_mixTrain88'...
+        'GRU_single500_switch0_150reps_ITI20_cue100_trial2_mixTrain'...
+        },...
+        {...
+        'GRU_single450_switch50_150reps_ITI20_cue100_trial2_mixTrain16'...
+        'GRU_single450_switch50_150reps_ITI20_cue100_trial2_mixTrain40'...
+        'GRU_single450_switch50_150reps_ITI20_cue100_trial2_mixTrain64'...
+        'GRU_single450_switch50_150reps_ITI20_cue100_trial2_mixTrain88'...
+        'GRU_single450_switch50_150reps_ITI20_cue100_trial2_mixTrain'...
+        }...
+        }
+
+elseif ITI ==60
+
+
+    mdls = {...
+        {...
+        'GRU_single500_switch0_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single500_switch0_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single500_switch0_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single500_switch0_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single500_switch0_150reps_ITI60_cue100_trial2_mixTrain'...
+        },...
+        {...
+        'GRU_single450_switch50_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single450_switch50_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single450_switch50_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single450_switch50_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single450_switch50_150reps_ITI60_cue100_trial2_mixTrain'...
+        }...
+        }
+
+
+elseif ITI == 2060
+
+    mdls = {...
+        {...
+        'GRU_single500_switch0_150reps_ITI20_cue100_trial2_mixTrain16'...
+        'GRU_single500_switch0_150reps_ITI20_cue100_trial2_mixTrain40'...
+        'GRU_single500_switch0_150reps_ITI20_cue100_trial2_mixTrain64'...
+        'GRU_single500_switch0_150reps_ITI20_cue100_trial2_mixTrain88'...
+        'GRU_single500_switch0_150reps_ITI20_cue100_trial2_mixTrain'...
+        },...
+        {...
+        'GRU_single450_switch50_150reps_ITI20_cue100_trial2_mixTrain16'...
+        'GRU_single450_switch50_150reps_ITI20_cue100_trial2_mixTrain40'...
+        'GRU_single450_switch50_150reps_ITI20_cue100_trial2_mixTrain64'...
+        'GRU_single450_switch50_150reps_ITI20_cue100_trial2_mixTrain88'...
+        'GRU_single450_switch50_150reps_ITI20_cue100_trial2_mixTrain'...
+        }...
+        {...
+        'GRU_single500_switch0_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single500_switch0_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single500_switch0_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single500_switch0_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single500_switch0_150reps_ITI60_cue100_trial2_mixTrain'...
+        },...
+        {...
+        'GRU_single450_switch50_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single450_switch50_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single450_switch50_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single450_switch50_150reps_ITI60_cue100_trial2_mixTrain_sweepFactors'...
+        'GRU_single450_switch50_150reps_ITI60_cue100_trial2_mixTrain'...
+        }...
+        }
+else
+    error('wrong ITI')
+
+end
+
+if ITI == 2060
+    x_list={[16, 40, 64, 88, 112], [16, 40, 64, 88, 112],[16, 40, 64, 88, 112], [16, 40, 64, 88, 112]}
+    nmdl= [length(mdls{1}), length(mdls{2}), length(mdls{3}), length(mdls{4}), ]
+    cols = {[.5,.5,.5],[0,1,0],[0,0,0],[0,.5,0]};
+else
+    x_list={[16, 40, 64, 88, 112], [16, 40, 64, 88, 112]}
+    nmdl= [length(mdls{1}), length(mdls{2})]
+    cols = {[0,0,0],[0,1,0],[1,0,0], [1,1,0], [1,0,1], [0,1,1]};
+end
+
+
+
+
+fit_fld_name = sprintf('%s/della-outputs/_RNN/EM-mat', ROOT);
+orig_fld_name = sprintf('%s/della-outputs/_RNN/EM-mat', ROOT);
+
+
+
+
+cos_sim = @(x,y) normalize(x,1,'norm')'*normalize(y,1,'norm');
+nan_vecnorm = @(x) sqrt(nansum(x.^2));
+real_mean = @(x) real(nanmean(x));
+imag_mean = @(x) imag(nanmean(x));
+conj_mean = @(x) conj(nanmean(x));
+mxnorm = @(x) x./norm(x,'fro');
+mxzscore = @(x) (x-nanmean(x(:)))/nanstd(x(:));
+
+center = @(x) x-nanmean(x);
+vec = @(x) x(:);
+sem = @(x) nanstd(x,[],1)./sqrt(sum(isfinite(x)));
+sem_wn = @(x) ((size(x,2)-1)/size(x,2))*nanstd(x-nanmean(x,2),[],1)./sqrt(sum(isfinite(x)));
+
+log_vecnorm = @(x) log(vecnorm(x));
+symt = @(x) .5*(x+x');
+
+
+
+
+
+
+%% PLOT test ll
+
+
+
+figure;
+nexttile(1); hold on;
+nexttile(2); hold on;
+
+print_test_R2=[];
+for oo = 1:length(mdls)
+
+
+    [y_dim, test_ll, test_R2] = deal(nan(512,nmdl(oo)));
+    fwd_R2 = nan(512,nmdl(oo),26);
+
+
+    for mm = 1:nmdl(oo)
+
+        mdl = mdls{oo}{mm}
+        x_disp = x_list{oo}(mm)
+
+        % get files
+        files = dir(fullfile(fit_fld_name, [sprintf('%s/%s', mdl,mdl), sprintf('_Pt*_xdim%d.mat', x_disp)]));
+
+        npt = length(files)
+        if npt==0
+            keyboard
+        end
+
+
+        % get info
+        d0 = load(fullfile(files(1).folder, files(1).name));
+        dat = d0.dat;
+        n_times = d0.dat.n_times;
+        dat.epoch = [ones(10,1)*2; ones(20,1)*3; ones(10,1)*4];
+
+
+        parfor pp = 1:npt
+
+
+            % load
+            try
+                fname = fullfile(files(pp).folder, files(pp).name);
+                d = load(fname, 'res');
+            catch
+                disp('bad pt')
+                continue;
+            end
+
+            test_ll(pp,mm) = d.res.em_test_loglik;
+            test_R2(pp,mm) = d.res.test_R2_white(end);
+            fwd_R2(pp,mm,:) = d.res.fwd_R2_white;
+            y_dim(pp,mm) = length(d.res.mdl_em.R.mat);
+
+        end
+
+    end
+
+
+    print_test_R2 = [print_test_R2; test_R2(:,end)];
+
+
+
+
+
+    % plot test ll
+
+    ctest_ll = test_ll - nanmean(test_ll,2);
+    nexttile(1); hold on;
+    % plot(x_list, ctest_ll', 'ok', 'LineWidth', 1, 'MarkerFaceColor', 'w', 'MarkerSize', 5)
+    plot(x_list{oo}, nanmean(ctest_ll)', '-', 'LineWidth', 3, 'color', cols{oo})
+    plot(x_list{oo}, nanmean(ctest_ll)', '-o', 'LineWidth', 1, 'MarkerFaceColor', cols{oo}, 'MarkerSize', 8, 'color', cols{oo})
+    % ylim([-.2,inf])
+    xlim([min(x_list{oo})-5, max(x_list{oo})+5])
+    title('test ll (pt-centered)')
+    xlim([min(x_list{oo})-5, max(x_list{oo})+5])
+    xticks(sort(unique(x_list{oo})))
+    set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+    xline(nanmedian(y_dim(:)), '-', 'color', cols{oo})
+
+
+
+
+
+    nexttile(2); hold on;
+    fwd_R2(fwd_R2==0) = nan;
+    % plot(1:26, squeeze((fwd_R2(:,1,:)))', 'ok', 'LineWidth', 1, 'MarkerFaceColor', 'w', 'MarkerSize', 5)
+    plot(1:26, squeeze(nanmean(fwd_R2(:,end,:))), '-o', 'color', cols{oo}, 'LineWidth', 3, 'MarkerFaceColor',cols{oo})
+    ylim([0,1])
+    xlim([0,27])
+    title('test R2 (lookahead)')
+    set(gca, 'TickDir', 'out', 'LineWidth', 1)
+    xlabel('horizon (s)')
+    ylabel('R^2 (cov)')
+
+    set(gcf, 'Renderer', 'Painters')
+
+
+
+
+
+end
+
+
+prct_test_R2 = [min(print_test_R2), prctile(print_test_R2, [2.5, 25, 50, 75, 97.5]), max(print_test_R2)]
+
+
+
+
+
+
+
+
+%% configure TASK ENERGY and GENERALIZATION ANALYSIS ===============================================================
+
+ITI = 20 % 20, 60
+
+
+if ITI == 20
+    eeg_fn = '2024-11-24-11h_A23__prepTrial200_ica-p5_p1-30-firws_prevTask'
+elseif ITI == 60
+    eeg_fn = '2024-10-31-10h_H19__prepTrial200-prevTask'
+end
+
+
+mdls = {...
+    sprintf('GRU_single500_switch0_150reps_ITI%d_cue100_trial2_mixTrain', ITI),...
+    sprintf('GRU_single450_switch50_150reps_ITI%d_cue100_trial2_mixTrain', ITI),...
+    eeg_fn,...
+    }
+
+
+x_disp=112;
+
+if contains(mdls{3}, 'A23')
+    n_times_eeg =125;
+else
+    n_times_eeg =100;
+end
+
+
+
+nmdl= length(mdls)
+
+fit_fld_name = sprintf('%s/della-outputs/_RNN/EM-mat',ROOT);
+orig_fld_name = sprintf('%s/della-outputs/_RNN/EM-mat',ROOT);
+
+
+
+cos_sim = @(x,y) normalize(x,1,'norm')'*normalize(y,1,'norm');
+nan_vecnorm = @(x) sqrt(nansum(x.^2));
+real_mean = @(x) real(nanmean(x));
+imag_mean = @(x) imag(nanmean(x));
+conj_mean = @(x) conj(nanmean(x));
+mxnorm = @(x) x./norm(x,'fro');
+mxzscore = @(x) (x-nanmean(x(:)))/nanstd(x(:));
+
+center = @(x) x-nanmean(x);
+vec = @(x) x(:);
+sem = @(x) nanstd(x,[],1)./sqrt(sum(isfinite(x)));
+sem_wn = @(x) ((size(x,2)-1)/size(x,2))*nanstd(x-nanmean(x,2),[],1)./sqrt(sum(isfinite(x)));
+
+log_vecnorm = @(x) log(vecnorm(x));
+symt = @(x) .5*(x+x');
+
+
+cols = {[0,0,0], [0,1,0], [0,0,1], [1,0,0], [1,1,0], [1,0,1], [0,1,1]};
+
+
+
+%% load data (TASK ENERGY and GENERALIZATION ANALYSIS) ===============================================================
+
+
+
+
+A_norm = 0
+B_norm = 0
+Bu_norm = 0
+B0_norm = 0
+B0_null = 1
+
+
+use_Bu = 1
+
+do_prevTask =0
+
+
+
+metric_Bu = @(x) log(vecnorm(x));
+metric_W = @(x) log(vecnorm(x));
+metric_L = @(x) log(vecnorm(x));
+
+metric_C = @(x) log(trace(x));
+% metric_C = @(x) real(logdet(x));
+
+metric_E = @(x) -sum(x .* log2(max(x,eps)));
+
+
+
+clear all_switch_C all_repeat_C...
+    all_switch_dyn all_repeat_dyn ...
+    all_switch_Bu all_repeat_Bu all_B0 ...
+    pct_good_C pct_good_dyn ...
+    all_switch_E all_repeat_E all_time_E ...
+    all_d all_p sum_C o_gram c_gram
+
+mdl_id = nan(512,3);
+
+tic
+for mm = 1:length(mdls)
+
+
+    % get files
+    files = dir(fullfile(fit_fld_name, [sprintf('%s/%s', mdls{mm},mdls{mm}), sprintf('_Pt*_xdim%d.mat', x_disp)]));
+    npt = length(files)
+
+
+    % get info
+    d0 = load(fullfile(files(1).folder, files(1).name));
+    dat = d0.dat;
+    n_times = d0.dat.n_times;
+    dat.epoch = [ones(10,1)*2; ones(20,1)*3; ones(10,1)*4];
+
+
+    % states
+    [switch_W, repeat_W,...
+        switch_C, repeat_C,...
+        switch_C_B0, repeat_C_B0, switch_C_Bt, repeat_C_Bt,...
+        switch_E, repeat_E, time_E,...
+        switch_Bu, repeat_Bu,...
+        ] = deal(nan(npt, dat.n_times));
+
+
+    % dyn
+    [dyn_switch, dyn_repeat,...
+        ] = deal(nan(x_disp,n_times,npt));
+
+    % init
+    prevTask_B0 = nan(npt,x_disp);
+
+
+
+
+    parfor pp = 1:npt
+
+
+        % load
+        try
+            fname = fullfile(files(pp).folder, files(pp).name);
+            d = load(fname, 'mdl', 'dat');
+            dat = d.dat;
+            mdl = d.mdl;
+        catch
+            continue;
+        end
+
+
+
+        fprintf('pt %d\n', pp)
+
+
+
+        % standard realization   
+        T = diag(diag(d.mdl.Q.mat));
+
+        A = T\d.mdl.A*T;
+        B = T\d.mdl.B;
+        B0 = T\d.mdl.B0;
+        C{pp} = d.mdl.C*T;
+
+
+        % ablate
+        if A_norm == 1
+            A = A*0;
+        end
+
+        if B_norm == 1
+            B = normalize(B,1,'zscore');
+            B0 = normalize(B0,1,'zscore');
+        end
+
+        if B0_norm == 1
+            B0 = normalize(B0,1,'norm');
+        end
+
+        if B0_null ==1
+            B0 = 0*B0;
+        end
+
+
+
+        % calcuate Bu ========================================
+
+        u_basis = dat.u_train(1:dat.n_bases,:,1);
+        Bu_time = B(:, ismember(dat.pred_name, {'bspline','spline'})) * u_basis;
+
+        if use_Bu==1
+
+            if any(ismember(dat.pred_name, 'taskSwitch'))
+
+                B_switch = B(:, ismember(dat.pred_name, 'taskSwitch'));
+                B_repeat = B(:, ismember(dat.pred_name, 'taskRepeat'));
+
+                switch_example = find(squeeze(dat.u_train(find(ismember(dat.pred_name, 'taskSwitch'),1),1,:)),1);
+                repeat_example = find(squeeze(dat.u_train(find(ismember(dat.pred_name, 'taskRepeat'),1),1,:)),1);
+
+                if contains(mdls{mm}, {'GRU', 'RNN'})
+
+                    u_switch_sw = dat.u_train(ismember(dat.pred_name, 'taskSwitch'),:,switch_example);
+                    u_repeat_sw = dat.u_train(ismember(dat.pred_name, 'taskRepeat'),:,switch_example);
+
+                    u_switch_re = dat.u_train(ismember(dat.pred_name, 'taskSwitch'),:,repeat_example);
+                    u_repeat_re = dat.u_train(ismember(dat.pred_name, 'taskRepeat'),:,repeat_example);
+
+                else
+                    u_switch_sw = dat.u_train(ismember(dat.pred_name, 'taskSwitch'),:,find(dat.trial.taskSwitch(dat.sel_train)==1,1));
+                    u_repeat_sw = dat.u_train(ismember(dat.pred_name, 'taskRepeat'),:,find(dat.trial.taskSwitch(dat.sel_train)==1,1));
+
+                    u_switch_re = dat.u_train(ismember(dat.pred_name, 'taskSwitch'),:,find(dat.trial.taskRepeat(dat.sel_train)==1,1));
+                    u_repeat_re = dat.u_train(ismember(dat.pred_name, 'taskRepeat'),:,find(dat.trial.taskRepeat(dat.sel_train)==1,1));
+
+                end
+
+                if do_prevTask
+                    Bu_switch = (B_switch*u_switch_sw + B_repeat*u_repeat_sw) + (B_switch*u_switch_re + B_repeat*u_repeat_re);
+                    Bu_repeat = (B_switch*u_switch_sw + B_repeat*u_repeat_sw) - (B_switch*u_switch_re + B_repeat*u_repeat_re);
+                else
+                    Bu_switch = B_switch*u_switch_sw + B_repeat*u_repeat_sw;
+                    Bu_repeat = B_switch*u_switch_re + B_repeat*u_repeat_re;
+                end
+
+            else
+
+                assert(~contains(mdls{mm}, {'GRU', 'RNN'}), 'use_Bu not formatted for GRU')
+
+                u_task = dat.u_train(ismember(dat.pred_name, 'task'),:,find(dat.trial.task(dat.sel_train)==1,1));
+                u_prevTask = dat.u_train(ismember(dat.pred_name, 'prevTask'),:,find(dat.trial.prevTask(dat.sel_train)==1,1));
+
+                B_task = B(:, ismember(dat.pred_name, 'task'));
+                B_prevTask = B(:, ismember(dat.pred_name, 'prevTask'));
+
+                Bu_switch = B_task*u_task - B_prevTask*u_prevTask;
+                Bu_repeat = B_task*u_task + B_prevTask*u_prevTask;
+
+
+
+
+            end
+
+
+        else
+
+            assert(0,'do not use')
+
+            B_switch = B(:, ismember(dat.pred_name, 'taskSwitch'));
+            Bu_switch = B_switch * u_basis;
+
+            B_repeat = B(:, ismember(dat.pred_name, 'taskRepeat'));
+            Bu_repeat = B_repeat * u_basis;
+
+        end
+
+
+
+        if Bu_norm == 1
+            Bu_switch = normalize(Bu_switch,1,'zscore');
+            Bu_repeat = normalize(Bu_repeat,1,'zscore');
+            B0 = normalize(B0,1,'zscore');
+        end
+
+
+        % Input strength ==========================================
+        switch_Bu(pp,:) = metric_Bu(Bu_switch);
+        repeat_Bu(pp,:) = metric_Bu(Bu_repeat);
+
+
+        % SIMUALTED timecourse ====================================
+
+
+
+        % simulate
+        for tt = 1:n_times
+
+
+            if tt ==1
+
+
+                % INIT
+                % B0_prev = B0(:, ismember(dat.pred0_name, 'prevTask'));
+
+                % INIT
+                if use_Bu==1
+                    B0_prev = B0(:, ismember(dat.pred0_name, 'prevTask'));
+                    u0_prevTask = abs(dat.u0_train(ismember(dat.pred0_name, 'prevTask'),1));
+                    B0_prev = B0_prev*u0_prevTask;
+                else
+                    B0_prev = B0(:, ismember(dat.pred0_name, 'prevTask'));
+                end
+
+
+
+                C_switch = B0_prev*B0_prev';
+                C_repeat = B0_prev*B0_prev';
+
+                B0_time = B0(:, ismember(dat.pred0_name, 'bias'));
+                C_time = B0_time*B0_time';
+
+                X_switch = -B0_prev;
+                X_repeat = B0_prev;
+
+                prevTask_B0(pp,:) = B0_prev;
+
+                % only init vs only post-init
+                C_switch_B0 = C_switch;
+                C_repeat_B0 = C_repeat;
+                [C_switch_Bt, C_repeat_Bt] = deal(zeros(size(C_switch)));
+
+
+            else
+
+                % states
+                X_switch = A*X_switch + Bu_switch(:,tt-1);
+                X_repeat = A*X_repeat + Bu_repeat(:,tt-1);
+
+                C_switch = A*C_switch*A' + Bu_switch(:,tt-1)*Bu_switch(:,tt-1)';
+                C_repeat = A*C_repeat*A' + Bu_repeat(:,tt-1)*Bu_repeat(:,tt-1)';
+                C_time = A*C_time*A' + Bu_time(:,tt-1)*Bu_time(:,tt-1)';
+
+                % only init vs only post-init
+                C_switch_B0 = A*C_switch_B0*A';
+                C_repeat_B0 = A*C_repeat_B0*A';
+                C_switch_Bt = A*C_switch_Bt*A' + Bu_switch(:,tt-1)*Bu_switch(:,tt-1)';
+                C_repeat_Bt = A*C_repeat_Bt*A' + Bu_repeat(:,tt-1)*Bu_repeat(:,tt-1)';
+
+            end
+
+
+
+
+            % metrics ==========
+            % switch_W(pp,tt) = metric_W(X_switch);
+            % repeat_W(pp,tt) = metric_W(X_repeat);
+
+            if tt==1 & B0_null==1
+                switch_C(pp,tt) = 0;
+                repeat_C(pp,tt) = 0;
+            else
+                switch_C(pp,tt) = metric_C(C_switch);
+                repeat_C(pp,tt) = metric_C(C_repeat);
+            end
+
+
+            switch_C_B0(pp,tt) = metric_C(C_switch_B0);
+            repeat_C_B0(pp,tt) = metric_C(C_repeat_B0);
+            switch_C_Bt(pp,tt) = metric_C(C_switch_Bt);
+            repeat_C_Bt(pp,tt) = metric_C(C_repeat_Bt);
+
+
+            switch_E(pp,tt) = metric_E((diag(C_switch).^2)./sum(diag(C_switch).^2));
+            repeat_E (pp,tt)= metric_E((diag(C_repeat).^2)./sum(diag(C_repeat).^2));
+            time_E(pp,tt) = metric_E((diag(C_time).^2)./sum(diag(C_time).^2));
+
+
+
+            % % state prox
+            % full_distSame_W(pp,tt) = metric_W(X_switch-X_repeat);
+            % full_distDiff_W(pp,tt) = metric_W(X_switch+X_repeat);
+            %
+            % % dynamics
+            dyn_switch(:,tt,pp) = X_switch;
+            dyn_repeat(:,tt,pp) = X_repeat;
+
+
+        end
+
+
+
+    end
+
+    good_pt = all(isfinite(switch_C),2);
+
+
+    pct_good(mm) = mean(good_pt)
+
+    % figure;
+    % nexttile; hold on;
+    % plot(log(o_gram)')
+    % nexttile; hold on;
+    % plot(log(c_gram)')
+    % nexttile; hold on;
+    % plot(log(g_gram'))
+
+
+    all_switch_C{mm} = switch_C(good_pt,:);
+    all_repeat_C{mm} = repeat_C(good_pt,:);
+
+
+    all_switch_C{mm} = switch_C(good_pt,:);
+    all_repeat_C{mm} = repeat_C(good_pt,:);
+
+
+    all_switch_C_B0{mm} = switch_C_B0(good_pt,:);
+    all_repeat_C_B0{mm} = repeat_C_B0(good_pt,:);
+    all_switch_C_Bt{mm} = switch_C_Bt(good_pt,:);
+    all_repeat_C_Bt{mm} = repeat_C_Bt(good_pt,:);
+
+    all_switch_E{mm} = switch_E(good_pt,:);
+    all_repeat_E{mm} = repeat_E(good_pt,:);
+    all_time_E{mm} = time_E(good_pt,:);
+
+    all_switch_dyn{mm} = dyn_switch(:,:,good_pt);
+    all_repeat_dyn{mm} = dyn_repeat(:,:,good_pt);
+
+
+    all_switch_Bu{mm} = switch_Bu(good_pt,:);
+    all_repeat_Bu{mm} = repeat_Bu(good_pt,:);
+    all_B0{mm} = prevTask_B0(good_pt,:);
+
+
+    pct_good(mm) = mean(all(isfinite(all_switch_C{mm}),2))
+
+
+
+    % CONTROL
+    sum_C = sum(switch_C-repeat_C,2);
+    [~,C_pval, C_ci] = ttest(sum_C);
+    fprintf('\nENERGY %s -----\nd=%.2g, pval=%.2g, CI=[%.2g, %.2g]\n', mdls{mm}, nanmean(sum_C)/nanstd(sum_C), C_pval, C_ci(1), C_ci(2))
+
+    all_sum_C{mm} = sum_C;
+    all_d(mm) = nanmean(sum_C)/nanstd(sum_C);
+    all_p(mm) = C_pval;
+
+
+    toc
+
+end
+
+
+disp(all_d)
+disp(all_p)
+
+
+if ITI == 60
+
+    switch_Bu_60 = all_switch_Bu;
+    repeat_Bu_60 = all_repeat_Bu;
+
+    switch_C_B0_60 = all_switch_C_B0;
+    repeat_C_B0_60 = all_repeat_C_B0;
+    switch_C_Bt_60 = all_switch_C_Bt;
+    repeat_C_Bt_60 = all_repeat_C_Bt;
+
+    switch_dyn_60 = all_switch_dyn;
+    repeat_dyn_60 = all_repeat_dyn;
+
+
+
+    B0_60 = all_B0;
+
+elseif ITI ==20
+
+    switch_Bu_20 = all_switch_Bu;
+    repeat_Bu_20 = all_repeat_Bu;
+
+    switch_C_B0_20 = all_switch_C_B0;
+    repeat_C_B0_20 = all_repeat_C_B0;
+    switch_C_Bt_20 = all_switch_C_Bt;
+    repeat_C_Bt_20 = all_repeat_C_Bt;
+
+    switch_dyn_20 = all_switch_dyn;
+    repeat_dyn_20 = all_repeat_dyn;
+
+    B0_20 = all_B0;
+
+end
+
+
+
+this_npt = size(all_switch_C{1},1);
+threshold = tinv(.95,512)/sqrt(this_npt)
+
+fprintf('N = %d\n', this_npt)
+
+
+
+if any([A_norm,B_norm, Bu_norm,B0_norm])
+    fprintf('WARNING -- USING NORMALIZATION!!')
+end
+
+
+
+
+
+%% ********** distance of initial condition to task events **********
+
+% figure;
+center = @(x) x-nanmean(x);
+calc_sim = @(x,cc) cos_sim(x(:,1,cc), x(:,2:end,cc))
+% calc_sim = @(dists,cc) center(dists(:,1,cc))'*center(dists(:,2:end,cc))
+% calc_dist = @(x) rms(x(:,1,cc)-x(:,2:end,cc))
+
+do_tfce =1;
+if do_tfce
+    % cite: https://www.sciencedirect.com/science/article/pii/S1053811912010300
+    addpath(genpath(sprint('%s/src/analysis/MatlabTFCE-master',ROOT)))
+    nsim=1e4;
+    try
+        parpool;
+    catch
+    end
+end
+
+
+
+% difference timeseries
+figure;
+
+% all_dist = {}
+for mm = nmdl:-1:1
+
+
+
+    % Euclidian distance to landmarks ------------------------
+    nexttile; hold on;
+
+    % long ITI SWITCH
+    dists = switch_dyn_60{mm};
+    distA = squeeze(rms(dists(:,1,:) - dists(:,2:end,:)))';
+    distB = squeeze(rms(dists(:,1,:) + dists(:,2:end,:)))';
+    dist_diff = (distA-distB)./(distA+distB);
+    long_switch = dist_diff;
+    if mm==3
+        all_dist{mm}{1} = dist_diff(:,round(linspace(1,99,39)));
+    else
+        all_dist{mm}{1} = dist_diff;
+    end
+
+    p1a=errorarea(2:size(distA,2)+1, nanmean(dist_diff),...
+        sem_wn(dist_diff),...
+        sem_wn(dist_diff),...
+        '-','color', 'r', 'LineWidth', 2);
+
+
+    % long ITI REPEAT
+    dists = repeat_dyn_60{mm};
+    distA = squeeze(rms(dists(:,1,:) - dists(:,2:end,:)))';
+    distB = squeeze(rms(dists(:,1,:) + dists(:,2:end,:)))';
+    dist_diff = (distA-distB)./(distA+distB);
+    long_repeat = dist_diff;
+    if mm==3
+        all_dist{mm}{2} = dist_diff(:,round(linspace(1,99,39)));
+    else
+        all_dist{mm}{2} = dist_diff;
+    end
+
+    p2a=errorarea(2:size(distA,2)+1, nanmean(dist_diff),...
+        sem_wn(dist_diff),...
+        sem_wn(dist_diff),...
+        '-','color', 'm', 'LineWidth', 2);
+
+    long_dist = .5*(long_switch+long_repeat);
+
+    % short ITI SWITCH
+    dists = switch_dyn_20{mm};
+    distA = squeeze(rms(dists(:,1,:) - dists(:,2:end,:)))';
+    distB = squeeze(rms(dists(:,1,:) + dists(:,2:end,:)))';
+    dist_diff = (distA-distB)./(distA+distB);
+    short_switch = dist_diff;
+    if mm==3
+        all_dist{mm}{3} = dist_diff(:,round(linspace(1,124,39)));
+    else
+        all_dist{mm}{3} = dist_diff;
+    end
+
+    p3a=errorarea(2:size(distA,2)+1, nanmean(dist_diff),...
+        sem_wn(dist_diff),...
+        sem_wn(dist_diff),...
+        '-','color', 'b', 'LineWidth', 2);
+
+
+    % short ITI REPEAT
+    dists = repeat_dyn_20{mm};
+    distA = squeeze(rms(dists(:,1,:) - dists(:,2:end,:)))';
+    distB = squeeze(rms(dists(:,1,:) + dists(:,2:end,:)))';
+    dist_diff = (distA-distB)./(distA+distB);
+    short_repeat = dist_diff;
+    if mm==3
+        all_dist{mm}{4} = dist_diff(:,round(linspace(1,124,39)));
+    else
+        all_dist{mm}{4} = dist_diff;
+    end
+
+    p4a=errorarea(2:size(distA,2)+1, nanmean(dist_diff),...
+        sem_wn(dist_diff),...
+        sem_wn(dist_diff),...
+        '-','color', 'c', 'LineWidth', 2);
+
+    short_dist = .5*(short_switch+short_repeat);
+
+
+    title(sprintf('state proximity (%s)', mdls{mm}(1:20)))
+    legend([p1a,p2a,p3a,p4a], {...
+        'switch-60A',...
+        'repeat-60A',...
+        'switch-20A',...
+        'repeat-20A',...
+        })
+    ylim([-.8,.1])
+    xlim([0,inf])
+    yline(0,'-k')
+    set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+
+    if mm==3
+        % disp(size(distA,2))
+        xline(25)
+        xline(75)
+        xline(100)
+
+        tsel = 1:99;
+    else
+        tsel = 1:39;
+    end
+
+
+    fprintf('\n\n---------\n%s\n---------\n',mdls{mm})
+
+    sel = 1:25
+    m_long = mean(long_dist(:,sel),2);
+    m_short = mean(short_dist(:,sel),2);
+
+    [~,p_longshort,~,stats_longshort] = ttest2(m_long, m_short)
+    [pval_longshort_rank,~,stats_longshort_rank]=ranksum(m_long, m_short)
+    d_longshort = stats_longshort.tstat*sqrt((1/length(m_long)) + (1/length(m_short)))
+    fprintf('---------\n')
+
+    [pos,neg]=eeg_tfce2(long_dist(:,tsel), short_dist(:,tsel),nsim);
+    plot_clusters_seperate(tsel, long_dist(:,tsel), short_dist(:,tsel),pos,neg);
+
+end
+
+set(gcf, 'Renderer', 'painters')
+
+%
+% figure; hold on;
+% for ii = 1:4
+%     plot(mean(all_dist{3}{ii}))
+% end
+
+
+
+% test difference
+r_avg_1 = bootstrap_mean4_sim(all_dist{1}, all_dist{3},10000)
+r_avg_2 = bootstrap_mean4_sim(all_dist{2}, all_dist{3},10000)
+r_avg_diff = bootstrap_mean4_diff(all_dist{1},all_dist{2}, all_dist{3},10000)
+
+r_avg_11 = bootstrap_mean4_sim(all_dist{1}, all_dist{1},10000)
+r_avg_22 = bootstrap_mean4_sim(all_dist{2}, all_dist{2},10000)
+r_avg_33 = bootstrap_mean4_sim(all_dist{3}, all_dist{3},10000)
+
+
+
+
+fprintf('\nmidpoint rnn1: mse = %.4g CI: [%.4g to %.4g] max:[%.4g]', r_avg_1(2), r_avg_1(1), r_avg_1(3), sqrt(r_avg_11(3).*r_avg_33(3))) ;
+fprintf('\nmidpoint rnn2: mse = %.4g CI: [%.4g to %.4g] max:[%.4g]', r_avg_2(2), r_avg_2(1), r_avg_2(3), sqrt(r_avg_22(3).*r_avg_33(3)));
+fprintf('\nmidpoint diff: mse = %.4g CI: [%.4g to %.4g]\n', r_avg_diff(2), r_avg_diff(1), r_avg_diff(3));
+
+
+
+
+
+
+%% **********  plot cross-lagged similarity  **********
+
+do_tfce=0
+bootstrap_avg=0
+n_boot = 10000;
+col_range=.30
+
+if do_tfce
+    % cite: https://www.sciencedirect.com/science/article/pii/S1053811912010300
+    addpath(genpath(sprint('%s/src/analysis/MatlabTFCE-master', ROOT)))
+    nsim=1e4;
+    try
+        parpool;
+    catch
+    end
+end
+
+
+clear all_cross each_cross
+figure;
+for mm = nmdl:-1:1
+
+    dyn_switch = all_switch_dyn{mm};
+    dyn_repeat = all_repeat_dyn{mm};
+
+    if contains(mdls{mm}, 'ISI30')
+        n_times = 50;
+
+    elseif contains(mdls{mm}, 'prepTrial')
+
+        n_times = n_times_eeg;
+
+        files = dir(fullfile(fit_fld_name, [sprintf('%s/%s', mdls{mm},mdls{mm}), sprintf('_Pt*_xdim%d.mat', x_disp)]));
+        fname = fullfile(files(1).folder, files(1).name);
+        d = load(fname,'dat');
+        dat_eeg = d.dat;
+    else
+        n_times = 40;
+
+    end
+    npt = size(dyn_repeat,3);
+
+    % STATE SIMILARITY
+    triu_sel = triu(true(n_times,n_times));
+
+    mdl_r = [];
+    [cross_sim,cross_orth] = deal(nan(n_times, n_times, npt));
+    for pp = 1:npt
+
+        cross_sim(:,:,pp) = cos_sim(dyn_switch(:,:,pp), dyn_repeat(:,:,pp));
+
+        % if mm < 3
+        %     mdl_r(pp)=cos_sim(vec((cross_sim(:,:,pp))), vec_3);
+        % end
+
+        % [u,s,v] = svd(cross_sim(:,:,pp));
+        % cross_orth(:,:,pp) = u*s;
+
+    end
+
+    each_cross{mm} = cross_sim;
+    all_cross{mm} = nanmean(cross_sim,3);
+    all_r{mm} = mdl_r;
+
+
+    % if mm ==3
+    %     vec_3 = vec((all_cross{3}(round(linspace(1,n_times,40)),round(linspace(1,n_times,40)))));
+    % end
+
+
+
+
+
+    % cross-sim
+    alpha = 2/3;
+    sim_perm = 1000;
+    try
+        parpool
+    catch
+
+    end
+
+    R_tfce = [];
+    R_tfce(:,:,1,:) = cross_sim;
+    R_tfce(1,1,1,:) = nan;
+
+
+
+    nexttile;
+    imagesc(nanmean(cross_sim,3),[-col_range,col_range]);
+
+    if do_tfce
+        [pcorr_pos, pcorr_neg] = matlab_tfce('onesample',2,R_tfce,[],[],sim_perm,2,1,8,.01,[],[]);
+
+        p_map = max(1-pcorr_neg,1-pcorr_pos)>.975;
+
+        hold on;
+        contour(max(1-pcorr_neg,1-pcorr_pos)>.975, 1, '-k');
+    end
+
+
+
+    hold on;
+    % contour(max(1-pcorr_neg,1-pcorr_pos)>.975,1, '-k');
+
+    if mm==3
+        xline(find(dat_eeg.epoch == 3, 1)-1); try;xline(find(dat_eeg.epoch == 4, 1)-1);catch;end;
+        yline(find(dat_eeg.epoch == 3, 1)-1); try;yline(find(dat_eeg.epoch == 4, 1)-1);catch;end;
+
+    else
+        xline(find(dat.epoch == 3, 1)-1); try;xline(find(dat.epoch == 4, 1)-1);catch;end;
+        yline(find(dat.epoch == 3, 1)-1); try;yline(find(dat.epoch == 4, 1)-1);catch;end;
+
+    end
+
+
+    colormap(vik);
+    axis('square');
+    title('switch - repeat similarity');
+
+
+
+end
+
+
+set(gcf, 'Renderer', 'painters')
+
+
+
+
+
+if bootstrap_avg == 1
+
+    if contains(mdls{1}, 'ITI20')==1
+        tsel = round(linspace(1,n_times_eeg,40));
+    else
+        tsel = round(linspace(1,n_times_eeg,40));
+    end
+
+    [r_avg_1, sd_avg_1] = bootstrap_mean_sim(all_cross{1},...
+        all_cross{3}(tsel,tsel),...
+        10000)
+
+    if contains(mdls{2}, 'ITI20')==1
+        tsel = round(linspace(1,n_times_eeg,40));
+    else
+        tsel = round(linspace(1,n_times_eeg,40));
+    end
+
+    [r_avg_2, sd_avg_2] = bootstrap_mean_sim(all_cross{2},...
+        all_cross{3}(tsel,tsel),...
+        10000)
+
+
+    [r_avg_diff, sd_avg_diff] =  bootstrap_mean_diff(...
+        all_cross{1},...
+        all_cross{2},...
+        all_cross{3}(tsel,tsel),...
+        10000)
+
+else
+
+    if contains(mdls{1}, 'ITI20')==1
+        tsel = round(linspace(1,n_times_eeg,40));
+    else
+        tsel = round(linspace(1,n_times_eeg,40));
+    end
+
+    sz = size(each_cross{1});
+    flat_cross_1 = reshape(each_cross{1}, [prod(sz(1:2)), sz(3)])';
+    % sz_flat_1 = size(flat_cross_1)
+
+    sz = size(each_cross{2});
+    flat_cross_2 = reshape(each_cross{2}, [prod(sz(1:2)), sz(3)])';
+    % sz_flat_2 = size(flat_cross_2)
+
+    sz = size(each_cross{3}(tsel,tsel,:));
+    flat_cross_3 = reshape(each_cross{3}(tsel,tsel,:), [prod(sz(1:2)), sz(3)])';
+    % sz_flat_3 = size(flat_cross_3)
+
+
+    [r_avg_1, sd_avg_1] = bootstrap_mean_sim(flat_cross_1,...
+        flat_cross_3,...
+        10000)
+
+    if contains(mdls{2}, 'ITI20')==1
+        tsel = round(linspace(1,n_times_eeg,40));
+    else
+        tsel = round(linspace(1,n_times_eeg,40));
+    end
+
+    [r_avg_2, sd_avg_2] = bootstrap_mean_sim(flat_cross_2,...
+        flat_cross_3,...
+        10000)
+
+
+    [r_avg_diff, sd_avg_diff] =  bootstrap_mean_diff(...
+        flat_cross_1,...
+        flat_cross_2,...
+        flat_cross_3,...
+        10000)
+
+
+    r_avg_11 = bootstrap_mean_sim(flat_cross_1,...
+        flat_cross_1,...
+        10000)
+
+    r_avg_22 = bootstrap_mean_sim(flat_cross_2,...
+        flat_cross_2,...
+        10000)
+
+    r_avg_33 = bootstrap_mean_sim(flat_cross_3,...
+        flat_cross_3,...
+        10000)
+
+end
+
+
+
+%avg
+vec1 = vec(all_cross{1});
+vec2 = vec(all_cross{2});
+vec3 = vec(all_cross{3}(tsel,tsel));
+
+% avg perm test
+vec12 = (vec1*norm(vec2) - vec2*norm(vec1))/(vecnorm(vec1)*vecnorm(vec2));
+
+perm_pval = permutation_rows1([vec3, vec12],...
+    @(x,sgn) normalize(x(:,1).*sgn,1,'norm')'*(x(:,2)),...
+    1000);
+
+fprintf('\ntaskgen rnn1: avg sim r= %.4g CI: [%.4g to %.4g] max:[%.4g]', r_avg_1(2), r_avg_1(1), r_avg_1(3), sqrt(r_avg_11(1).*r_avg_33(1))) ;
+fprintf('\ntaskgen rnn2: avg sim r= %.4g CI: [%.4g to %.4g] max:[%.4g]', r_avg_2(2), r_avg_2(1), r_avg_2(3), sqrt(r_avg_22(1).*r_avg_33(1)));
+fprintf('\ntaskgen diff: avg sim r= %.4g CI: [%.4g to %.4g] / pval = %.4g\n', r_avg_diff(2), r_avg_diff(1), r_avg_diff(3), perm_pval);
+
+
+
+
+
+
+
+
+
+
+
+
+
+%% **********  plot task energy  **********
+
+do_tfce =1;
+
+tsel = 1:40;
+
+tfce_sel = 1:40;
+
+
+if do_tfce
+    % cite: https://www.sciencedirect.com/science/article/pii/S1053811912010300
+    addpath(genpath(sprintf('%s/src/analysis/MatlabTFCE-master',ROOT))
+    nsim=1e4;
+    try
+        parpool;
+    catch
+    end
+end
+
+
+
+figure;
+nexttile(1); hold on;
+% nexttile(2); hold on;
+
+% FULL CONTROLLABILITY
+clear rms_human
+for mm = 1:3
+
+    switch_C = real(all_switch_C{mm});
+    repeat_C = real(all_repeat_C{mm});
+    c_diff = (switch_C - repeat_C);
+
+
+
+    nexttile(1); hold on;
+
+
+
+    % errorarea(tsel, nanmean(c_diff(:,tsel)),sem_wn(c_diff(:,tsel)), sem_wn(c_diff(:,tsel)), 'color', cols{mm}, 'LineWidth', 2);
+    errorarea(linspace(1,40,size(c_diff,2)), nanmean(c_diff),sem_wn(c_diff), sem_wn(c_diff), 'color', cols{mm}, 'LineWidth', 2);
+
+
+
+    title('Task Flexibility')
+    yline(0, '-k', 'LineWidth', 2)
+    xline(find(dat.epoch == 3, 1)-1); try;xline(find(dat.epoch == 4, 1)-1);catch;end;
+    ylabel('switch - repeat')
+    set(gca, 'TickDir', 'out', 'LineWidth', 1.5)
+    ylim([-.03, .03])
+    yl = ylim;
+    set(gcf, 'Renderer', 'painters')
+
+    if do_tfce
+
+        % [pos,neg]=eeg_tfce(switch_C(:,tfce_sel), repeat_C(:,tfce_sel),nsim);
+        % plot_clusters_seperate(tfce_sel, c_diff(:,tfce_sel), 0*c_diff(:,tfce_sel),pos,neg);
+
+        [pos,neg]=eeg_tfce(switch_C, repeat_C, nsim);
+        plot_clusters_seperate(linspace(1,40,size(c_diff,2)), c_diff, 0*c_diff,pos,neg);
+    else
+        % [stats] = test_cluster_mass(c_diff,threshold,1e4);
+        % plot_clusters(switch_C(:,tsel),repeat_C(:,tsel),stats.pos_pval, stats.neg_pval);
+    end
+
+
+    fprintf('\nMODEL %d ------------------------------------------------------\n',mm )
+    disp(mdls{mm})
+    auc = nanmean(switch_C-repeat_C,2);
+
+    cohen_d = nanmean(auc)/nanstd(auc)
+    [~,pval,para_ci,stats] = ttest(auc)
+    boot_ci = bootstrap_rows(auc, @(x)mean(x), 1e4)
+    fprintf('\n------------------------------------------------------------------------------------------\n')
+
+    if mm<3
+        % rms_human{mm} = log(rms((all_switch_C{mm} - all_repeat_C{mm}) - ...
+        %     mean(all_switch_C{3}(:,round(linspace(1,n_times_eeg,40))) - all_repeat_C{3}(:,round(linspace(1,n_times_eeg,40)))),2));
+
+        rms_human{mm} = cos_sim((all_switch_C{mm} - all_repeat_C{mm})',...
+            vec(mean(all_switch_C{3}(:,round(linspace(1,n_times_eeg,40))) - all_repeat_C{3}(:,round(linspace(1,n_times_eeg,40))))));
+    end
+
+
+end
+
+
+
+figure; hold on;
+[f,x]=ksdensity(rms_human{1});
+plot(x,f, '-k', 'LineWidth',2)
+[f,x]=ksdensity(rms_human{2});
+plot(x,f, '-g', 'LineWidth',2)
+
+
+
+net1_sim = [bootstrap_rows(rms_human{1}, @median, 10000)];
+net2_sim = [bootstrap_rows(rms_human{2}, @median, 10000)];
+
+[~,pval_rms,~,stats_rms]=ttest2((rms_human{1}), (rms_human{2}));
+[pval_rms_rank,~,stats_rms_rank]=ranksum((rms_human{1}), (rms_human{2}));
+d_rms = stats_rms.tstat*sqrt((1/length(rms_human{1})) + (1/length(rms_human{2})));
+
+fprintf('\nenergy rnn1: seed sim r= %.4g CI: [%.4g to %.4g]', net1_sim(2), net1_sim(1), net1_sim(3))
+fprintf('\nenergy rnn2: seed sim r= %.4g CI: [%.4g to %.4g]', net2_sim(2), net2_sim(1), net2_sim(3))
+fprintf('\nenergy diff: d=%.2g // t=%.4g, p=%.4g / z=%.4g, p=%.4g\n',d_rms, stats_rms.tstat, pval_rms, stats_rms_rank.zval, pval_rms_rank)
+
+
+
+
+% compare mean
+avgC_rnn_1 = vec(mean(all_switch_C{1} - all_repeat_C{1}));
+avgC_rnn_2 = vec(mean(all_switch_C{2} - all_repeat_C{2}));
+avgC_eeg = vec(mean(all_switch_C{3}(:,round(linspace(1,n_times_eeg,40))) - all_repeat_C{3}(:,round(linspace(1,n_times_eeg,40)))));
+
+
+
+% r_avg_1 = bootstrap_rows1([avgC_rnn_1, avgC_eeg], @(x)cos_sim(x(:,1),x(:,2)), 10000);
+% r_avg_2 = bootstrap_rows1([avgC_rnn_2, avgC_eeg], @(x)cos_sim(x(:,1),x(:,2)), 10000);
+% r_avg_diff = bootstrap_rows1(...
+%     [avgC_rnn_1, avgC_eeg, avgC_rnn_2, avgC_eeg],...
+%     @(x)cos_sim(x(:,1),x(:,2)) - cos_sim(x(:,3),x(:,4)), 10000);
+
+
+
+
+
+
+[r_avg_1, sd_avg_1] = bootstrap_mean_sim(all_switch_C{1} - all_repeat_C{1},...
+    all_switch_C{3}(:,round(linspace(1,n_times_eeg,40))) - all_repeat_C{3}(:,round(linspace(1,n_times_eeg,40))),...
+    10000)
+
+[r_avg_2, sd_avg_2]  = bootstrap_mean_sim(all_switch_C{2} - all_repeat_C{2},...
+    all_switch_C{3}(:,round(linspace(1,n_times_eeg,40))) - all_repeat_C{3}(:,round(linspace(1,n_times_eeg,40))),...
+    10000)
+
+[r_avg_diff, sd_avg_diff] =  bootstrap_mean_diff(...
+    all_switch_C{1} - all_repeat_C{1},...
+    all_switch_C{2} - all_repeat_C{2},...
+    all_switch_C{3}(:,round(linspace(1,n_times_eeg,40))) - all_repeat_C{3}(:,round(linspace(1,n_times_eeg,40))),...
+    10000)
+
+
+
+perm_pval =  permutation_rows1([avgC_eeg, avgC_rnn_1, avgC_rnn_2],...
+    @(x,sgn) sum(x(:,1).*sgn.*(x(:,2)*vecnorm(x(:,3)) - x(:,3)*vecnorm(x(:,2)))) / (prod(vecnorm(x))),...
+    10000);
+
+
+fprintf('\nenergy rnn1: avg sim r= %.4g CI: [%.4g to %.4g]', r_avg_1(2), r_avg_1(1), r_avg_1(3)) ;
+fprintf('\nenergy rnn2: avg sim r= %.4g CI: [%.4g to %.4g]', r_avg_2(2), r_avg_2(1), r_avg_2(3));
+fprintf('\nenergy diff: avg sim r= %.4g CI: [%.4g to %.4g], perm pval = %.2g \n', r_avg_diff(2), r_avg_diff(1), r_avg_diff(2), perm_pval);
+
+

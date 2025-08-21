@@ -1,0 +1,35 @@
+% compare 
+nt = 100;
+nx = 5;
+nu = 4;
+symt = @(x) .5*(x+x');
+
+
+A = eye(nx)*.9 + randn(nx)*.025;
+eigs(A,nx)
+B = randn(nx,nu,nt);
+
+ctrl = [];
+vecn = [];
+
+C = zeros(nx,nx);
+X = zeros(nx,1);
+
+for tt = 1:nt
+
+    C = symt(A*C*A' + symt(B(:,:,tt)*B(:,:,tt)'));
+    X = A*X + sum(B(:,:,tt),2);
+
+    ctrl(tt) = (trace(C)/nx);
+    vecn(tt) = (X'*X)/nx;
+
+end
+
+
+disp(ctrl)
+disp(vecn)
+
+figure; hold on;
+plot(ctrl, '-k')
+plot(vecn, '-r')
+legend({'ctrl', 'vecnorm'})

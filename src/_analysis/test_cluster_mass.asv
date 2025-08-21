@@ -1,0 +1,109 @@
+
+
+
+function stats = test_cluster_mass(dat,cft,n_perms)
+
+
+
+%% get original cluster mass
+[true_mass, idx] = cluster_loop(dat,cft);
+
+
+%% get cluster mass under permutations
+
+[max_stat,min_stat] = deal(nan(n_perms,1));
+rand_sign = [-1,1];
+d1 = size(dat,1);
+
+for pp = 1:n_perms
+
+    % sign flip
+    [null_mass,~] = cluster_loop(dat.*datasample(rand_sign, d1)', cft);
+    max_stat(pp) = max(null_mass);
+    min_stat(pp) = min(null_mass);
+
+end
+
+%%
+max_thresholds = prctile(max_stat, [2.5, 5, 95, 97.5]);
+min_thresholds = prctile(min_stat, [2.5, 5, 95, 97.5]);
+
+if length(true_mass) > 1
+    true_mass = true_mass(2:end);
+end
+
+pval_max = mean(true_mass < max_stat);
+pval_min = mean(true_mass > min_stat);
+pval = min(pval_max, pval_min)*2;
+
+[pos_pval, neg_pval] = deal(ones(1, size(dat,2)));
+if true_mass(1) ~= 0
+    for mm = 1:length(true_mass)
+        if true_mass(mm) > 0
+
+        else
+            
+        end
+
+    end
+end
+
+stats = struct;
+stats.pval = pval;
+stats.true_mass = true_mass;
+stats.idx = idx;
+stats.max_stat = max_stat;
+stats.max_thresholds = max_thresholds;
+stats.min_thresholds = min_thresholds;
+stats.clusterThreshold = cft;
+stats.n_perms = n_perms;
+
+end
+
+
+
+
+
+function [mass, idx] = cluster_loop(x,cft)
+
+d = nanmean(x,1)./nanstd(x,[],1);
+
+% reset cluster
+clust = 0;
+mass = 0;
+idx = [];
+
+for tt = 1:size(x,2)
+
+
+    if clust == 0 % if no cluster
+
+        if abs(d(tt)) > cft % if new cluster, create
+            mass = [mass, (d(tt))];
+            clust = sign(d(tt));
+            idx = [idx; [tt, tt]];
+
+        end
+
+    else % if there is a cluster
+
+        if d(tt)*clust > cft % if same cluster, add
+            mass(end) = mass(end) + (d(tt));
+            idx(end,2) = tt;
+
+
+        elseif d(tt)*clust < -cft % if different cluster, create
+            mass = [mass, (d(tt))];
+            clust = sign(d(tt));
+            idx = [idx; [tt, tt]];
+
+        else % no cluster
+            clust = 0;
+        end
+
+    end
+
+end
+
+
+end

@@ -8,7 +8,9 @@ For a more general SSM fitting pipeline, refer to [StateSpaceAnalysis.jl](https:
 ## Repository structure
 
 - `data/`
-	- Placeholder for datasets (very large; hosting TBD). See `data/README.md` for updates.
+	- `preproc-scripts/`
+		- EEG preprocessing code
+	- **NOTE**: datasets are very large, investigating hosting options. See `data/README.md` for updates.
 
 - `src/`
 	- `em/`: Expectation–Maximization implementation and helpers for task switching models
@@ -24,3 +26,8 @@ For a more general SSM fitting pipeline, refer to [StateSpaceAnalysis.jl](https:
 		- Shared analysis and plotting utilities
 	- `validation/`
 		- parameter recovery and code optimization
+	- `rnn/`
+		- `neuro-optimized/`
+			- RNNs fit to EEG recordings
+		- `task-optimized/`
+			- RNNs fit to the task
